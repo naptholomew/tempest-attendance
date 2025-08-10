@@ -1,8 +1,34 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { wclQuery } from '../lib/wcl.js';
 import { readAltMap, readOverrides, writeOverrides, writeAltMap } from '../lib/storage.js';
 
 const router = express.Router();
+
+// Resolve data directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const EXCLUDED_PATH = path.join(DATA_DIR, 'excluded.json');
+
+function ensureDataDir() {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(EXCLUDED_PATH)) fs.writeFileSync(EXCLUDED_PATH, JSON.stringify({}, null, 2));
+}
+function readExcludedDates() {
+  ensureDataDir();
+  try {
+    return JSON.parse(fs.readFileSync(EXCLUDED_PATH, 'utf-8')) || {};
+  } catch {
+    return {};
+  }
+}
+function writeExcludedDates(obj) {
+  ensureDataDir();
+  fs.writeFileSync(EXCLUDED_PATH, JSON.stringify(obj, null, 2));
+}
 
 // Guild & timezone config
 const GUILD = {
@@ -142,6 +168,7 @@ function isPlayerEntry(e) {
 router.get('/refresh', async (_req, res) => {
   try {
     const { start, end } = sixWeeksRange();
+    const excluded = readExcludedDates(); // { [dateKey]: reason }
 
     // 1) Get *all* reports for the window (paginated)
     const reports = await fetchAllReports(start, end);
@@ -151,15 +178,16 @@ router.get('/refresh', async (_req, res) => {
     for (const r of reports) {
       const dkey = dateKeyLocal(r.startTime, TIMEZONE);
       if (!isTueOrThuLocal(r.startTime, TIMEZONE)) continue; // only Tue/Thu
+      if (excluded[dkey]) continue; // skip excluded nights
       if (!grouped.has(dkey)) grouped.set(dkey, []);
       grouped.get(dkey).push(r);
     }
 
     // 3) For each dateKey, union presence across *all* reports on that day
-    const altMap = readAltMap();        // alt -> main
+    const altMap = readAltMap();          // alt -> main
     const overridesAll = readOverrides(); // { [dateKey]: { [name]: fractional } }
 
-    const nightKeys = Array.from(grouped.keys()).sort(); // unique Tue/Thu nights
+    const nightKeys = Array.from(grouped.keys()).sort(); // unique Tue/Thu nights (minus excluded)
     const perNight = []; // { dateKey, presentMain:Set<string>, nightOverrides }
 
     for (const dateKey of nightKeys) {
@@ -227,11 +255,49 @@ router.get('/refresh', async (_req, res) => {
       lastSeen: s.lastSeen
     })).sort((a, b) => b.pct - a.pct || b.attended - a.attended);
 
-    res.json({ nights: nightKeys, rows });
+    res.json({ nights: nightKeys, rows, excluded });
   } catch (e) {
     res.status(500).json({ error: e.message || String(e) });
   }
 });
+
+// --- Admin: Manage Excluded Dates ---
+// GET /api/attendance/excluded
+router.get('/excluded', (_req, res) => {
+  const excluded = readExcludedDates();
+  const dates = Object.entries(excluded).map(([dateKey, reason]) => ({ dateKey, reason }));
+  res.json({ dates });
+});
+
+// POST /api/attendance/excluded  (Authorization: Bearer <token>)
+router.post('/excluded', express.json(), (req, res) => {
+  if (req.get('authorization') !== `Bearer ${process.env.ATTEND_ADMIN_TOKEN}`) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  const { dateKey, reason } = req.body || {};
+  if (!dateKey) return res.status(400).json({ error: 'dateKey required (YYYY-MM-DD)' });
+  const ex = readExcludedDates();
+  ex[dateKey] = reason || 'Excluded';
+  writeExcludedDates(ex);
+  res.json({ ok: true, dateKey, reason: ex[dateKey] });
+});
+
+// DELETE /api/attendance/excluded  (Authorization: Bearer <token>)
+router.delete('/excluded', express.json(), (req, res) => {
+  if (req.get('authorization') !== `Bearer ${process.env.ATTEND_ADMIN_TOKEN}`) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  const { dateKey } = req.body || {};
+  if (!dateKey) return res.status(400).json({ error: 'dateKey required (YYYY-MM-DD)' });
+  const ex = readExcludedDates();
+  if (ex[dateKey]) {
+    delete ex[dateKey];
+    writeExcludedDates(ex);
+  }
+  res.json({ ok: true });
+});
+
+// Existing admin endpoints retained below
 
 // POST /api/attendance/override  (Authorization: Bearer <token>)
 router.post('/override', express.json(), (req, res) => {
