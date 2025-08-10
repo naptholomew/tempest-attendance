@@ -12,17 +12,24 @@ const GUILD = {
 const TIMEZONE = process.env.TIMEZONE || 'America/Chicago';
 
 const GUILD_REPORTS_GQL = `
-query GuildReports($name: String!, $serverSlug: String!, $serverRegion: String!, $start: Float!, $end: Float!) {
-  guildData {
-    guild(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {
-      id
-      reports(startTime: $start, endTime: $end) {
-        data { code startTime endTime }
-      }
+query GuildReports($guildName: String!, $guildServerSlug: String!, $guildServerRegion: String!, $start: Float!, $end: Float!) {
+  reportData {
+    reports(
+      guildName: $guildName
+      guildServerSlug: $guildServerSlug
+      guildServerRegion: $guildServerRegion
+      startTime: $start
+      endTime: $end
+      limit: 25
+      page: 1
+    ) {
+      data { code startTime endTime }
+      has_more_pages
     }
   }
 }
 `;
+
 
 const REPORT_FIGHTS_GQL = `
 query ReportFights($code: String!) {
@@ -82,8 +89,15 @@ router.get('/refresh', async (req, res) => {
     const { start, end } = sixWeeksRange();
 
     // 1) Get guild reports
-    const data = await wclQuery(GUILD_REPORTS_GQL, { ...GUILD, start, end });
-    const reports = data.guildData?.guild?.reports?.data ?? [];
+	const vars = {
+	guildName: GUILD.name,
+	guildServerSlug: GUILD.serverSlug,
+	guildServerRegion: GUILD.serverRegion,
+	start, end
+				};
+	const data = await wclQuery(GUILD_REPORTS_GQL, vars);
+	const reports = data.reportData?.reports?.data ?? [];
+
 
     // 2) Only Tuesday/Thursday by server time (America/Chicago)
     const filtered = reports.filter(r => isTueOrThuLocal(r.startTime, TIMEZONE));
