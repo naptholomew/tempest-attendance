@@ -1,4 +1,8 @@
 import express from 'express';
+
+// Only keep player entries from WCL tables
+const filterPlayers = (entries) => Array.isArray(entries) ? entries.filter(e => e && e.type === "Player") : [];
+
 import { wclQuery } from '../lib/wcl.js';
 import { readAltMap, readOverrides, writeOverrides, writeAltMap } from '../lib/storage.js';
 
@@ -11,7 +15,7 @@ const GUILD = {
 };
 const TIMEZONE = process.env.TIMEZONE || 'America/Chicago';
 
-/** Get *paginated* reports for a guild in time window via reportData.reports */
+/** Get *paginated* reports for a guild in time window */
 const GUILD_REPORTS_GQL = `
 query GuildReports(
   $guildName: String!, $guildServerSlug: String!, $guildServerRegion: String!,
@@ -34,29 +38,25 @@ query GuildReports(
 }
 `;
 
-/** Fights in a report — restrict to boss *kills* only */
+/** Fights in a report */
 const REPORT_FIGHTS_GQL = `
 query ReportFights($code: String!) {
   reportData {
     report(code: $code) {
-      fights(killType: Kills) {
-        id
-        encounterID
-        name
-        startTime
-        endTime
-      }
+      fights { id boss kill startTime endTime }
     }
   }
 }
 `;
 
-/** Presence on boss-kill fights: Damage OR Healing (table is JSON scalar; no sub-selection) */
+/** Presence on boss-kill fights: Damage OR Healing (no damage taken / active-time math) */
 const REPORT_DMG_TABLE_GQL = `
 query DamageTable($code: String!, $fightIDs: [Int]!) {
   reportData {
     report(code: $code) {
-      table(dataType: DamageDone, fightIDs: $fightIDs)
+      table(dataType: DamageDone, fightIDs: $fightIDs) {
+        entries { name }
+      }
     }
   }
 }
@@ -65,7 +65,9 @@ const REPORT_HEAL_TABLE_GQL = `
 query HealingTable($code: String!, $fightIDs: [Int]!) {
   reportData {
     report(code: $code) {
-      table(dataType: Healing, fightIDs: $fightIDs)
+      table(dataType: Healing, fightIDs: $fightIDs) {
+        entries { name }
+      }
     }
   }
 }
@@ -92,7 +94,7 @@ function dateKeyLocal(msUTC, tz) {
 async function fetchAllReports(start, end) {
   const all = [];
   let page = 1;
-  const limit = 100;
+  const limit = 100; // plenty high to minimize page turns
   while (true) {
     const vars = {
       guildName: GUILD.name,
@@ -126,8 +128,9 @@ router.get('/refresh', async (_req, res) => {
       // 3) Boss kill fights only
       const fightsData = await wclQuery(REPORT_FIGHTS_GQL, { code: r.code });
       const fights = fightsData?.reportData?.report?.fights ?? [];
-      if (!fights.length) continue;
-      const killIDs = fights.map(f => f.id);
+      const killFights = fights.filter(f => f.boss && f.kill);
+      if (!killFights.length) continue;
+      const killIDs = killFights.map(f => f.id);
 
       // 4) Presence if appears in Damage OR Healing tables for any kill
       const [dmg, heal] = await Promise.all([
@@ -135,19 +138,22 @@ router.get('/refresh', async (_req, res) => {
         wclQuery(REPORT_HEAL_TABLE_GQL, { code: r.code, fightIDs: killIDs })
       ]);
 
-      const dmgTable = dmg?.reportData?.report?.table || null;
-      const healTable = heal?.reportData?.report?.table || null;
-
-      const dmgEntries = Array.isArray(dmgTable?.entries) ? dmgTable.entries : (Array.isArray(dmgTable?.data?.entries) ? dmgTable.data.entries : []);
-      const healEntries = Array.isArray(healTable?.entries) ? healTable.entries : (Array.isArray(healTable?.data?.entries) ? healTable.data.entries : []);
-
       const presentSet = new Set();
-      for (const e of dmgEntries) {
-        const name = (e?.name || '').trim();
+
+      // Safety: remove known NPCs that sometimes appear in tables
+      const knownNPCs = new Set([
+        "Lieutenant General Andorov",
+        "Kaldorei Elite"
+      ]);
+      for (const npc of knownNPCs) {
+        if (presentSet.has(npc)) presentSet.delete(npc);
+      }
+      for (const e of (dmg?.reportData?.report?.table?.entries ?? [])) {
+        const name = (e.name || '').trim();
         if (name) presentSet.add(name);
       }
-      for (const e of healEntries) {
-        const name = (e?.name || '').trim();
+      for (const e of (heal?.reportData?.report?.table?.entries ?? [])) {
+        const name = (e.name || '').trim();
         if (name) presentSet.add(name);
       }
 
