@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Tempest Attendance Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; background:#0b0b0c; color:#eaeaea; padding: 24px; }
+    h1 { margin: 0 0 16px; }
+    .card { background:#15161a; border:1px solid #25262b; border-radius:16px; padding:16px; margin-bottom:16px; }
+    label { display:block; font-size:12px; color:#9aa0a6; margin-bottom:6px; }
+    input { width:100%; padding:8px 10px; border-radius:10px; border:1px solid #2b2c31; background:#101115; color:#eaeaea; }
+    button { margin-top:10px; padding:8px 12px; border-radius:10px; border:1px solid #2b2c31; background:#1b1c21; color:#eaeaea; cursor:pointer; }
+    button:hover { background:#23242a; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .muted { color:#9aa0a6; font-size:12px; }
+    .ok { color:#8bea8b; }
+    .err { color:#ff7a7a; }
+  </style>
+</head>
+<body>
+  <h1>⚡ Tempest Attendance Admin</h1>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Admin Token</label>
+        <input id="token" placeholder="ATTEND_ADMIN_TOKEN">
+      </div>
+      <div>
+        <label>Backend URL</label>
+        <input id="base" value="" placeholder="http://localhost:4000">
+      </div>
+    </div>
+    <div class="muted" style="margin-top:8px">This token must match the server's <code>ATTEND_ADMIN_TOKEN</code>.</div>
+  </div>
+
+  <div class="card">
+    <h2>Manual Attendance Override</h2>
+    <div class="row">
+      <div>
+        <label>Date (yyyy-mm-dd)</label>
+        <input id="ov-date" placeholder="2025-08-07">
+      </div>
+      <div>
+        <label>Character Name</label>
+        <input id="ov-name" placeholder="Beeper">
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div>
+        <label>Fractional (e.g., 1, 0.5, 0)</label>
+        <input id="ov-frac" placeholder="1">
+      </div>
+      <div></div>
+    </div>
+    <button onclick="sendOverride()">Save Override</button>
+    <div id="ov-msg" class="muted"></div>
+  </div>
+
+  <div class="card">
+    <h2>Link Alt → Main</h2>
+    <div class="row">
+      <div>
+        <label>Alt Name</label>
+        <input id="alt" placeholder="Beeperbank">
+      </div>
+      <div>
+        <label>Main Name</label>
+        <input id="main" placeholder="Beeper">
+      </div>
+    </div>
+    <button onclick="sendAlt()">Save Link</button>
+    <div id="alt-msg" class="muted"></div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function baseUrl() { return $('base').value || location.origin; }
+    function token() { return $('token').value.trim(); }
+
+    async function sendOverride() {
+      const url = baseUrl() + '/api/attendance/override';
+      const body = {
+        dateKey: $('ov-date').value.trim(),
+        name: $('ov-name').value.trim(),
+        fractional: Number($('ov-frac').value.trim())
+      };
+      try {
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() },
+          body: JSON.stringify(body)
+        });
+        const json = await r.json();
+        if (!r.ok || json.error) throw new Error(json.error || r.statusText);
+        $('ov-msg').innerHTML = '<span class="ok">Saved.</span>';
+      } catch (e) {
+        $('ov-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
+    }
+
+    async function sendAlt() {
+      const url = baseUrl() + '/api/attendance/alt-map';
+      const body = { alt: $('alt').value.trim(), main: $('main').value.trim() };
+      try {
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() },
+          body: JSON.stringify(body)
+        });
+        const json = await r.json();
+        if (!r.ok || json.error) throw new Error(json.error || r.statusText);
+        $('alt-msg').innerHTML = '<span class="ok">Saved.</span>';
+      } catch (e) {
+        $('alt-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
+    }
+
+    // Default the backend URL to current origin if served from same host
+    document.getElementById('base').value = location.origin.includes('localhost') ? 'http://localhost:4000' : location.origin;
+  </script>
+</body>
+</html>
