@@ -16,6 +16,14 @@
     .muted { color:#9aa0a6; font-size:12px; }
     .ok { color:#8bea8b; }
     .err { color:#ff7a7a; }
+
+    .tablewrap { max-height: 18rem; overflow:auto; border:1px solid #333; border-radius:10px; margin-top:10px; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    thead { background:#141414; color:#aaa; }
+    th, td { padding:.5rem .75rem; border-bottom:1px solid #222; }
+    th { text-align:left; }
+    td.actions { text-align:right; }
+    .danger { background:#8b1e1e; color:#fff; border:1px solid #444; padding:.35rem .6rem; border-radius:8px; }
   </style>
 </head>
 <body>
@@ -35,6 +43,7 @@
     <div class="muted" style="margin-top:8px">This token must match the server's <code>ATTEND_ADMIN_TOKEN</code>.</div>
   </div>
 
+  <!-- Manual Attendance Override -->
   <div class="card">
     <h2>Manual Attendance Override</h2>
     <div class="row">
@@ -54,10 +63,26 @@
       </div>
       <div></div>
     </div>
-    <button onclick="sendOverride()">Save Override</button>
-    <div id="ov-msg" class="muted"></div>
+    <button id="ov-save">Save Override</button>
+    <div id="ov-msg" class="muted" style="margin-top:8px"></div>
+
+    <!-- Overrides History -->
+    <div class="tablewrap" id="ov-tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Player</th>
+            <th>Fractional</th>
+            <th class="actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="ov-list"></tbody>
+      </table>
+    </div>
   </div>
 
+  <!-- Alt → Main -->
   <div class="card">
     <h2>Link Alt → Main</h2>
     <div class="row">
@@ -70,71 +95,116 @@
         <input id="main" placeholder="Beeper">
       </div>
     </div>
-    <button onclick="sendAlt()">Save Link</button>
-    <div id="alt-msg" class="muted"></div>
+    <button id="alt-save">Save Link</button>
+    <div id="alt-msg" class="muted" style="margin-top:8px"></div>
+
+    <!-- Links History -->
+    <div class="tablewrap" id="alt-tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Alt</th>
+            <th>Main</th>
+            <th class="actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="alt-list"></tbody>
+      </table>
+    </div>
   </div>
 
+  <!-- Excluded Dates -->
+  <div class="card">
+    <h2>Excluded Dates</h2>
+    <p class="muted" style="margin: 0 0 1rem 0;">
+      Nights listed here are ignored for attendance “possible” counts and cannot give/lose attendance.
+    </p>
 
+    <div class="row" style="align-items:end">
+      <div>
+        <label>Date</label>
+        <input id="exDate" type="date">
+      </div>
+      <div>
+        <label>Reason (optional)</label>
+        <input id="exReason" type="text" placeholder="Holiday: Christmas Eve">
+      </div>
+    </div>
+    <button id="exAddBtn">Add</button>
+    <div id="exMsg" class="muted" style="margin-top:8px"></div>
 
-<!-- Excluded Dates (skip-count nights) -->
-<section id="excluded-dates" style="margin-top: 1.5rem; padding: 1rem; border: 1px solid #333; border-radius: 12px;">
-  <h2 style="margin: 0 0 .75rem 0; font-size: 1.25rem;">Excluded Dates</h2>
-  <p style="margin: 0 0 1rem 0; color: #999;">
-    Nights listed here are ignored for attendance “possible” counts and cannot give/lose attendance.
-  </p>
-
-  <!-- Token (used if your page doesn't already have one). Saved in localStorage. -->
-  <div style="display:flex; gap:.5rem; align-items:center; margin-bottom:.75rem;">
-    <label for="exToken" style="min-width: 6rem;">Admin Token</label>
-    <input id="exToken" type="password" placeholder="ATTEND_ADMIN_TOKEN"
-           style="flex:1; padding:.5rem; border-radius:8px; border:1px solid #444;" />
-    <button id="exSaveTokenBtn" type="button"
-            style="padding:.5rem .75rem; border-radius:8px; border:1px solid #444; background:#222; color:#fff;">
-      Save
-    </button>
+    <div class="tablewrap" id="exListWrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Reason</th>
+            <th class="actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="exListBody"></tbody>
+      </table>
+    </div>
   </div>
-
-  <!-- Add form -->
-  <div style="display:flex; gap:.5rem; align-items:center; margin-bottom: .75rem;">
-    <input id="exDate" type="date" style="padding:.5rem; border-radius:8px; border:1px solid #444;" />
-    <input id="exReason" type="text" placeholder="Reason (optional)"
-           style="flex:1; padding:.5rem; border-radius:8px; border:1px solid #444;" />
-    <button id="exAddBtn" type="button"
-            style="padding:.5rem .75rem; border-radius:8px; border:1px solid #444; background:#2d6cdf; color:#fff;">
-      Add
-    </button>
-  </div>
-
-  <!-- List -->
-  <div id="exListWrap" style="max-height: 18rem; overflow:auto; border:1px solid #333; border-radius:10px;">
-    <table style="width:100%; border-collapse:collapse; font-size: 14px;">
-      <thead style="background:#141414; color:#aaa;">
-        <tr>
-          <th style="text-align:left; padding:.5rem .75rem; border-bottom:1px solid #333;">Date</th>
-          <th style="text-align:left; padding:.5rem .75rem; border-bottom:1px solid #333;">Reason</th>
-          <th style="text-align:right; padding:.5rem .75rem; border-bottom:1px solid #333;">Actions</th>
-        </tr>
-      </thead>
-      <tbody id="exListBody"></tbody>
-    </table>
-  </div>
-
-  <div id="exMsg" style="margin-top:.75rem; color:#aaa;"></div>
-</section>
 
   <script>
     const $ = (id) => document.getElementById(id);
-
     function baseUrl() { return $('base').value || location.origin; }
     function token() { return $('token').value.trim(); }
+
+    // -------- Overrides ----------
+    async function loadOverrides() {
+      try {
+        const r = await fetch(baseUrl() + '/api/attendance/overrides', { cache: 'no-store' });
+        if (!r.ok) throw new Error('GET overrides ' + r.status);
+        const json = await r.json();
+        const list = json.overrides || [];
+        $('ov-list').innerHTML = list.length
+          ? list.map(o => `
+              <tr>
+                <td>${o.dateKey}</td>
+                <td>${o.name}</td>
+                <td>${o.fractional}</td>
+                <td class="actions">
+                  <button class="danger" data-date="${o.dateKey}" data-name="${o.name}">Remove</button>
+                </td>
+              </tr>
+            `).join('')
+          : '<tr><td colspan="4" class="muted" style="padding:.75rem;">No overrides.</td></tr>';
+
+        // wire remove
+        $('ov-list').querySelectorAll('button.danger').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            try {
+              const r = await fetch(baseUrl() + '/api/attendance/override', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() },
+                body: JSON.stringify({ dateKey: btn.dataset.date, name: btn.dataset.name })
+              });
+              if (!r.ok) throw new Error('DELETE override ' + r.status);
+              $('ov-msg').innerHTML = '<span class="ok">Removed.</span>';
+              await loadOverrides();
+            } catch (e) {
+              $('ov-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+            }
+          });
+        });
+      } catch (e) {
+        $('ov-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
+    }
 
     async function sendOverride() {
       const url = baseUrl() + '/api/attendance/override';
       const body = {
         dateKey: $('ov-date').value.trim(),
         name: $('ov-name').value.trim(),
-        fractional: Number($('ov-frac').value.trim())
+        fractional: Number(($('ov-frac').value || '').trim())
       };
+      if (!body.dateKey || !body.name || Number.isNaN(body.fractional)) {
+        $('ov-msg').innerHTML = '<span class="err">Fill all fields (fractional must be a number)</span>';
+        return;
+      }
       try {
         const r = await fetch(url, {
           method: 'POST',
@@ -144,14 +214,60 @@
         const json = await r.json();
         if (!r.ok || json.error) throw new Error(json.error || r.statusText);
         $('ov-msg').innerHTML = '<span class="ok">Saved.</span>';
+        await loadOverrides();
       } catch (e) {
         $('ov-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
+    }
+
+    // -------- Alt→Main ----------
+    async function loadAltMap() {
+      try {
+        const r = await fetch(baseUrl() + '/api/attendance/alt-map', { cache: 'no-store' });
+        if (!r.ok) throw new Error('GET alt-map ' + r.status);
+        const json = await r.json();
+        const links = json.links || [];
+        $('alt-list').innerHTML = links.length
+          ? links.map(l => `
+              <tr>
+                <td>${l.alt}</td>
+                <td>${l.main}</td>
+                <td class="actions">
+                  <button class="danger" data-alt="${l.alt}">Remove</button>
+                </td>
+              </tr>
+            `).join('')
+          : '<tr><td colspan="3" class="muted" style="padding:.75rem;">No links.</td></tr>';
+
+        // wire remove
+        $('alt-list').querySelectorAll('button.danger').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            try {
+              const r = await fetch(baseUrl() + '/api/attendance/alt-map', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() },
+                body: JSON.stringify({ alt: btn.dataset.alt })
+              });
+              if (!r.ok) throw new Error('DELETE alt-map ' + r.status);
+              $('alt-msg').innerHTML = '<span class="ok">Removed.</span>';
+              await loadAltMap();
+            } catch (e) {
+              $('alt-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+            }
+          });
+        });
+      } catch (e) {
+        $('alt-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
       }
     }
 
     async function sendAlt() {
       const url = baseUrl() + '/api/attendance/alt-map';
       const body = { alt: $('alt').value.trim(), main: $('main').value.trim() };
+      if (!body.alt || !body.main) {
+        $('alt-msg').innerHTML = '<span class="err">Provide both alt and main.</span>';
+        return;
+      }
       try {
         const r = await fetch(url, {
           method: 'POST',
@@ -161,157 +277,95 @@
         const json = await r.json();
         if (!r.ok || json.error) throw new Error(json.error || r.statusText);
         $('alt-msg').innerHTML = '<span class="ok">Saved.</span>';
+        await loadAltMap();
       } catch (e) {
         $('alt-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
       }
     }
 
-    // Default the backend URL to current origin if served from same host
-    document.getElementById('base').value = location.origin.includes('localhost') ? 'http://localhost:4000' : location.origin;
-  </script>
-  
-  <script>
-(function () {
-  const base = `${location.origin}/api/attendance`;
-  const qs = (sel) => document.querySelector(sel);
-
-  // If your page already has a global token input, this tries to reuse it:
-  const existingTokenField = qs('#adminToken') || qs('#token');
-
-  const els = {
-    token: qs('#exToken'),
-    saveTokenBtn: qs('#exSaveTokenBtn'),
-    date: qs('#exDate'),
-    reason: qs('#exReason'),
-    addBtn: qs('#exAddBtn'),
-    listBody: qs('#exListBody'),
-    msg: qs('#exMsg'),
-  };
-
-  // Load/save token (localStorage, or mirror from existing field if present)
-  function getToken() {
-    const fromExisting = existingTokenField && existingTokenField.value.trim();
-    if (fromExisting) return fromExisting;
-    return localStorage.getItem('ATTEND_ADMIN_TOKEN') || (els.token && els.token.value.trim()) || '';
-  }
-  function setToken(t) {
-    if (els.token) els.token.value = t || '';
-    localStorage.setItem('ATTEND_ADMIN_TOKEN', t || '');
-  }
-
-  // UI helpers
-  function setMsg(text, ok = true) {
-    if (!els.msg) return;
-    els.msg.textContent = text || '';
-    els.msg.style.color = ok ? '#a5ffa5' : '#ffb4b4';
-  }
-  function rowHTML(dateKey, reason) {
-    return `
-      <tr>
-        <td style="padding:.5rem .75rem; border-bottom:1px solid #222;">${dateKey}</td>
-        <td style="padding:.5rem .75rem; border-bottom:1px solid #222;">${reason || ''}</td>
-        <td style="padding:.5rem .75rem; border-bottom:1px solid #222; text-align:right;">
-          <button data-date="${dateKey}" class="ex-remove"
-                  style="padding:.35rem .6rem; border-radius:8px; border:1px solid #444; background:#8b1e1e; color:#fff;">
-            Remove
-          </button>
-        </td>
-      </tr>
-    `;
-  }
-
-  async function loadExcluded() {
-    try {
-      const res = await fetch(`${base}/excluded`, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`GET excluded: ${res.status}`);
-      const json = await res.json();
-      const dates = (json && json.dates) || [];
-      els.listBody.innerHTML = dates.length
-        ? dates.map(d => rowHTML(d.dateKey, d.reason)).join('')
-        : '<tr><td colspan="3" style="padding:.75rem;">No excluded dates.</td></tr>';
-      // wire remove buttons
-      els.listBody.querySelectorAll('.ex-remove').forEach(btn => {
-        btn.addEventListener('click', () => removeExcluded(btn.getAttribute('data-date')));
-      });
-    } catch (e) {
-      console.error(e);
-      setMsg('Failed to load excluded dates.', false);
+    // -------- Excluded Dates ----------
+    function exRowHTML(dateKey, reason) {
+      return `
+        <tr>
+          <td>${dateKey}</td>
+          <td>${reason || ''}</td>
+          <td class="actions">
+            <button class="danger" data-date="${dateKey}">Remove</button>
+          </td>
+        </tr>
+      `;
     }
-  }
 
-  async function addExcluded() {
-    const dateKey = (els.date && els.date.value) || '';
-    const reason = (els.reason && els.reason.value) || '';
-    if (!dateKey) return setMsg('Pick a date first.', false);
+    async function loadExcluded() {
+      const base = baseUrl() + '/api/attendance';
+      try {
+        const res = await fetch(`${base}/excluded`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`GET excluded: ${res.status}`);
+        const json = await res.json();
+        const dates = (json && json.dates) || [];
+        $('exListBody').innerHTML = dates.length
+          ? dates.map(d => exRowHTML(d.dateKey, d.reason)).join('')
+          : '<tr><td colspan="3" class="muted" style="padding:.75rem;">No excluded dates.</td></tr>';
 
-    const token = getToken();
-    if (!token) return setMsg('Missing admin token.', false);
-
-    try {
-      const res = await fetch(`${base}/excluded`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ dateKey, reason })
-      });
-      if (!res.ok) throw new Error(`POST excluded: ${res.status}`);
-      setMsg(`Excluded ${dateKey}${reason ? ` — ${reason}` : ''}`);
-      els.reason.value = '';
-      await loadExcluded();
-    } catch (e) {
-      console.error(e);
-      setMsg('Failed to add excluded date.', false);
+        $('exListBody').querySelectorAll('button.danger').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const tokenVal = token();
+            try {
+              const res = await fetch(base + '/excluded', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tokenVal}` },
+                body: JSON.stringify({ dateKey: btn.dataset.date })
+              });
+              if (!res.ok) throw new Error(`DELETE excluded: ${res.status}`);
+              $('exMsg').innerHTML = '<span class="ok">Removed.</span>';
+              await loadExcluded();
+            } catch (e) {
+              $('exMsg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+            }
+          });
+        });
+      } catch (e) {
+        $('exMsg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
     }
-  }
 
-  async function removeExcluded(dateKey) {
-    const token = getToken();
-    if (!token) return setMsg('Missing admin token.', false);
-
-    try {
-      const res = await fetch(`${base}/excluded`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ dateKey })
-      });
-      if (!res.ok) throw new Error(`DELETE excluded: ${res.status}`);
-      setMsg(`Removed ${dateKey}`);
-      await loadExcluded();
-    } catch (e) {
-      console.error(e);
-      setMsg('Failed to remove excluded date.', false);
+    async function addExcluded() {
+      const base = baseUrl() + '/api/attendance';
+      const dateKey = $('exDate').value || '';
+      const reason = $('exReason').value || '';
+      if (!dateKey) { $('exMsg').innerHTML = '<span class="err">Pick a date first.</span>'; return; }
+      try {
+        const res = await fetch(base + '/excluded', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token()}`
+          },
+          body: JSON.stringify({ dateKey, reason })
+        });
+        if (!res.ok) throw new Error(`POST excluded: ${res.status}`);
+        $('exMsg').innerHTML = '<span class="ok">Saved.</span>';
+        $('exReason').value = '';
+        await loadExcluded();
+      } catch (e) {
+        $('exMsg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
     }
-  }
 
-  // Wire UI
-  if (els.saveTokenBtn && els.token) {
-    els.saveTokenBtn.addEventListener('click', () => {
-      setToken(els.token.value.trim());
-      setMsg('Admin token saved.');
-    });
-    // Prefill token if we have one
-    const saved = localStorage.getItem('ATTEND_ADMIN_TOKEN');
-    if (saved) els.token.value = saved;
-  }
+    // Wire top buttons
+    document.getElementById('ov-save').addEventListener('click', sendOverride);
+    document.getElementById('alt-save').addEventListener('click', sendAlt);
+    document.getElementById('exAddBtn').addEventListener('click', addExcluded);
 
-  if (els.addBtn) els.addBtn.addEventListener('click', addExcluded);
+    // Default backend URL to current origin
+    $('base').value = location.origin.includes('localhost') ? 'http://localhost:4000' : location.origin;
 
-  // Initial load
-  document.addEventListener('DOMContentLoaded', loadExcluded);
-  // Also reload if the existing global token input changes
-  if (existingTokenField) {
-    existingTokenField.addEventListener('change', () => {
-      setMsg('Token updated from global field.');
+    // Initial loads
+    document.addEventListener('DOMContentLoaded', () => {
+      loadOverrides();
+      loadAltMap();
       loadExcluded();
     });
-  }
-})();
-</script>
-
+  </script>
 </body>
 </html>
