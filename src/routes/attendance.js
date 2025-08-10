@@ -146,48 +146,56 @@ router.get('/refresh', async (_req, res) => {
     // 1) Get *all* reports for the window (paginated)
     const reports = await fetchAllReports(start, end);
 
-    // 2) Only Tuesday/Thursday by server time (America/Chicago)
-    const filtered = reports.filter(r => isTueOrThuLocal(r.startTime, TIMEZONE));
+    // 2) Group reports by local dateKey (America/Chicago)
+    const grouped = new Map(); // dateKey -> array of report objects
+    for (const r of reports) {
+      const dkey = dateKeyLocal(r.startTime, TIMEZONE);
+      if (!isTueOrThuLocal(r.startTime, TIMEZONE)) continue; // only Tue/Thu
+      if (!grouped.has(dkey)) grouped.set(dkey, []);
+      grouped.get(dkey).push(r);
+    }
 
-    // Collect per-night presence (mapped to mains) and per-night overrides
-    const altMap = readAltMap(); // alt -> main
+    // 3) For each dateKey, union presence across *all* reports on that day
+    const altMap = readAltMap();        // alt -> main
     const overridesAll = readOverrides(); // { [dateKey]: { [name]: fractional } }
 
-    const nightKeys = []; // unique list of dateKeys
-    const perNight = []; // [{ dateKey, presentMain:Set<string>, nightOverrides: Record<string, number> }]
+    const nightKeys = Array.from(grouped.keys()).sort(); // unique Tue/Thu nights
+    const perNight = []; // { dateKey, presentMain:Set<string>, nightOverrides }
 
-    for (const r of filtered) {
-      // 3) Boss kill fights only
-      const fightsData = await wclQuery(REPORT_FIGHTS_GQL, { code: r.code });
-      const fights = fightsData?.reportData?.report?.fights ?? [];
-      if (!fights.length) continue;
-      const killIDs = fights.map(f => f.id);
-
-      // 4) Presence if appears in Damage OR Healing tables for any kill
-      const [dmg, heal] = await Promise.all([
-        wclQuery(REPORT_TABLE_GQL, { code: r.code, fightIDs: killIDs, type: 'DamageDone' }),
-        wclQuery(REPORT_TABLE_GQL, { code: r.code, fightIDs: killIDs, type: 'Healing' })
-      ]);
-
-      const dmgEntries = extractEntries(dmg?.reportData?.report?.table).filter(isPlayerEntry);
-      const healEntries = extractEntries(heal?.reportData?.report?.table).filter(isPlayerEntry);
-
+    for (const dateKey of nightKeys) {
+      const reportsForDay = grouped.get(dateKey) || [];
       const presentSet = new Set();
-      for (const e of dmgEntries) presentSet.add((e.name || '').trim());
-      for (const e of healEntries) presentSet.add((e.name || '').trim());
+
+      for (const r of reportsForDay) {
+        // Boss kill fights
+        const fightsData = await wclQuery(REPORT_FIGHTS_GQL, { code: r.code });
+        const fights = fightsData?.reportData?.report?.fights ?? [];
+        if (!fights.length) continue;
+        const killIDs = fights.map(f => f.id);
+
+        // Damage + Healing presence
+        const [dmg, heal] = await Promise.all([
+          wclQuery(REPORT_TABLE_GQL, { code: r.code, fightIDs: killIDs, type: 'DamageDone' }),
+          wclQuery(REPORT_TABLE_GQL, { code: r.code, fightIDs: killIDs, type: 'Healing' })
+        ]);
+
+        const dmgEntries = extractEntries(dmg?.reportData?.report?.table).filter(isPlayerEntry);
+        const healEntries = extractEntries(heal?.reportData?.report?.table).filter(isPlayerEntry);
+
+        for (const e of dmgEntries) presentSet.add((e.name || '').trim());
+        for (const e of healEntries) presentSet.add((e.name || '').trim());
+      }
       presentSet.delete('');
 
       const presentMain = new Set();
       for (const n of presentSet) presentMain.add(altMap[n] || n);
 
-      const dateKey = dateKeyLocal(r.startTime, TIMEZONE);
       const nightOverrides = overridesAll[dateKey] || {};
 
-      if (!nightKeys.includes(dateKey)) nightKeys.push(dateKey);
       perNight.push({ dateKey, presentMain, nightOverrides });
     }
 
-    // 5) Universe of players who appeared or were overridden at least once
+    // 4) Universe of players: anyone present on any night OR overridden
     const allPlayers = new Set();
     for (const night of perNight) {
       for (const n of night.presentMain) allPlayers.add(n);
@@ -219,7 +227,7 @@ router.get('/refresh', async (_req, res) => {
       lastSeen: s.lastSeen
     })).sort((a, b) => b.pct - a.pct || b.attended - a.attended);
 
-    res.json({ nights: nightKeys.sort(), rows });
+    res.json({ nights: nightKeys, rows });
   } catch (e) {
     res.status(500).json({ error: e.message || String(e) });
   }
