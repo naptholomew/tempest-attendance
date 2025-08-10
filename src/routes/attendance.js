@@ -149,8 +149,12 @@ router.get('/refresh', async (_req, res) => {
     // 2) Only Tuesday/Thursday by server time (America/Chicago)
     const filtered = reports.filter(r => isTueOrThuLocal(r.startTime, TIMEZONE));
 
-    const nights = []; // list of dateKeys
-    const attendanceByNight = []; // [{ dateKey, presentSet:Set<string> }]
+    // Collect per-night presence (mapped to mains) and per-night overrides
+    const altMap = readAltMap(); // alt -> main
+    const overridesAll = readOverrides(); // { [dateKey]: { [name]: fractional } }
+
+    const nightKeys = []; // unique list of dateKeys
+    const perNight = []; // [{ dateKey, presentMain:Set<string>, nightOverrides: Record<string, number> }]
 
     for (const r of filtered) {
       // 3) Boss kill fights only
@@ -173,44 +177,49 @@ router.get('/refresh', async (_req, res) => {
       for (const e of healEntries) presentSet.add((e.name || '').trim());
       presentSet.delete('');
 
+      const presentMain = new Set();
+      for (const n of presentSet) presentMain.add(altMap[n] || n);
+
       const dateKey = dateKeyLocal(r.startTime, TIMEZONE);
-      nights.push(dateKey);
-      attendanceByNight.push({ dateKey, presentSet });
+      const nightOverrides = overridesAll[dateKey] || {};
+
+      if (!nightKeys.includes(dateKey)) nightKeys.push(dateKey);
+      perNight.push({ dateKey, presentMain, nightOverrides });
     }
 
-    // 5) Rollup with alt mapping and overrides
-    const altMap = readAltMap(); // alt -> main
-    const overrides = readOverrides(); // { [dateKey]: { [name]: fractional } }
+    // 5) Universe of players who appeared or were overridden at least once
+    const allPlayers = new Set();
+    for (const night of perNight) {
+      for (const n of night.presentMain) allPlayers.add(n);
+      for (const k of Object.keys(night.nightOverrides)) allPlayers.add(k);
+    }
 
-    const stats = {}; // { name: { nightsPossible, nightsAttended, lastSeen } }
-    const dateSet = new Set(nights);
+    const totalNights = nightKeys.length;
+    const stats = {}; // { name: { nightsAttended, lastSeen } }
+    for (const name of allPlayers) stats[name] = { nightsAttended: 0, lastSeen: '' };
 
-    for (const night of attendanceByNight) {
-      const presentMain = new Set();
-      for (const n of night.presentSet) presentMain.add(altMap[n] || n);
-
-      const nightOverrides = overrides[night.dateKey] || {};
-      const candidates = new Set([...presentMain, ...Object.keys(nightOverrides)]);
-
-      for (const name of candidates) {
-        const s = (stats[name] ||= { nightsPossible: 0, nightsAttended: 0, lastSeen: '' });
-        s.nightsPossible += 1;
-        const baseAttend = presentMain.has(name) ? 1 : 0;
-        const applied = (nightOverrides[name] ?? baseAttend);
-        s.nightsAttended += applied;
-        if (!s.lastSeen || night.dateKey > s.lastSeen) s.lastSeen = night.dateKey;
+    for (const night of perNight) {
+      for (const name of allPlayers) {
+        const baseAttend = night.presentMain.has(name) ? 1 : 0;
+        const applied = (night.nightOverrides[name] ?? baseAttend);
+        stats[name].nightsAttended += applied;
+        if (night.presentMain.has(name)) {
+          if (!stats[name].lastSeen || night.dateKey > stats[name].lastSeen) {
+            stats[name].lastSeen = night.dateKey;
+          }
+        }
       }
     }
 
     const rows = Object.entries(stats).map(([name, s]) => ({
       name,
       attended: Number(s.nightsAttended.toFixed(2)),
-      possible: s.nightsPossible,
-      pct: s.nightsPossible ? Math.round((s.nightsAttended / s.nightsPossible) * 100) : 0,
+      possible: totalNights,
+      pct: totalNights ? Math.round((s.nightsAttended / totalNights) * 100) : 0,
       lastSeen: s.lastSeen
     })).sort((a, b) => b.pct - a.pct || b.attended - a.attended);
 
-    res.json({ nights: Array.from(dateSet).sort(), rows });
+    res.json({ nights: nightKeys.sort(), rows });
   } catch (e) {
     res.status(500).json({ error: e.message || String(e) });
   }
