@@ -34,7 +34,7 @@ query GuildReports(
 }
 `;
 
-/** Fights in a report — restrict to boss *kills* only (no 'boss' or 'kill' fields used) */
+/** Fights in a report — restrict to boss *kills* only */
 const REPORT_FIGHTS_GQL = `
 query ReportFights($code: String!) {
   reportData {
@@ -51,14 +51,12 @@ query ReportFights($code: String!) {
 }
 `;
 
-/** Presence on boss-kill fights: Damage OR Healing (we don't use DamageTaken / activeTime) */
+/** Presence on boss-kill fights: Damage OR Healing (table is JSON scalar; no sub-selection) */
 const REPORT_DMG_TABLE_GQL = `
 query DamageTable($code: String!, $fightIDs: [Int]!) {
   reportData {
     report(code: $code) {
-      table(dataType: DamageDone, fightIDs: $fightIDs) {
-        entries { name }
-      }
+      table(dataType: DamageDone, fightIDs: $fightIDs)
     }
   }
 }
@@ -67,9 +65,7 @@ const REPORT_HEAL_TABLE_GQL = `
 query HealingTable($code: String!, $fightIDs: [Int]!) {
   reportData {
     report(code: $code) {
-      table(dataType: Healing, fightIDs: $fightIDs) {
-        entries { name }
-      }
+      table(dataType: Healing, fightIDs: $fightIDs)
     }
   }
 }
@@ -139,13 +135,19 @@ router.get('/refresh', async (_req, res) => {
         wclQuery(REPORT_HEAL_TABLE_GQL, { code: r.code, fightIDs: killIDs })
       ]);
 
+      const dmgTable = dmg?.reportData?.report?.table || null;
+      const healTable = heal?.reportData?.report?.table || null;
+
+      const dmgEntries = Array.isArray(dmgTable?.entries) ? dmgTable.entries : (Array.isArray(dmgTable?.data?.entries) ? dmgTable.data.entries : []);
+      const healEntries = Array.isArray(healTable?.entries) ? healTable.entries : (Array.isArray(healTable?.data?.entries) ? healTable.data.entries : []);
+
       const presentSet = new Set();
-      for (const e of (dmg?.reportData?.report?.table?.entries ?? [])) {
-        const name = (e.name || '').trim();
+      for (const e of dmgEntries) {
+        const name = (e?.name || '').trim();
         if (name) presentSet.add(name);
       }
-      for (const e of (heal?.reportData?.report?.table?.entries ?? [])) {
-        const name = (e.name || '').trim();
+      for (const e of healEntries) {
+        const name = (e?.name || '').trim();
         if (name) presentSet.add(name);
       }
 
