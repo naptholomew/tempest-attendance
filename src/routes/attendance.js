@@ -11,7 +11,7 @@ const GUILD = {
 };
 const TIMEZONE = process.env.TIMEZONE || 'America/Chicago';
 
-/** Get *paginated* reports for a guild in time window */
+/** Get *paginated* reports for a guild in time window via reportData.reports */
 const GUILD_REPORTS_GQL = `
 query GuildReports(
   $guildName: String!, $guildServerSlug: String!, $guildServerRegion: String!,
@@ -34,18 +34,24 @@ query GuildReports(
 }
 `;
 
-/** Fights in a report */
+/** Fights in a report — restrict to boss *kills* only (no 'boss' or 'kill' fields used) */
 const REPORT_FIGHTS_GQL = `
 query ReportFights($code: String!) {
   reportData {
     report(code: $code) {
-      fights { id boss kill startTime endTime }
+      fights(killType: Kills) {
+        id
+        encounterID
+        name
+        startTime
+        endTime
+      }
     }
   }
 }
 `;
 
-/** Presence on boss-kill fights: Damage OR Healing (no damage taken / active-time math) */
+/** Presence on boss-kill fights: Damage OR Healing (we don't use DamageTaken / activeTime) */
 const REPORT_DMG_TABLE_GQL = `
 query DamageTable($code: String!, $fightIDs: [Int]!) {
   reportData {
@@ -90,7 +96,7 @@ function dateKeyLocal(msUTC, tz) {
 async function fetchAllReports(start, end) {
   const all = [];
   let page = 1;
-  const limit = 100; // plenty high to minimize page turns
+  const limit = 100;
   while (true) {
     const vars = {
       guildName: GUILD.name,
@@ -124,9 +130,8 @@ router.get('/refresh', async (_req, res) => {
       // 3) Boss kill fights only
       const fightsData = await wclQuery(REPORT_FIGHTS_GQL, { code: r.code });
       const fights = fightsData?.reportData?.report?.fights ?? [];
-      const killFights = fights.filter(f => f.boss && f.kill);
-      if (!killFights.length) continue;
-      const killIDs = killFights.map(f => f.id);
+      if (!fights.length) continue;
+      const killIDs = fights.map(f => f.id);
 
       // 4) Presence if appears in Damage OR Healing tables for any kill
       const [dmg, heal] = await Promise.all([
