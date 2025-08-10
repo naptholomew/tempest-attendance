@@ -11,8 +11,12 @@ const GUILD = {
 };
 const TIMEZONE = process.env.TIMEZONE || 'America/Chicago';
 
+/** Get *paginated* reports for a guild in time window */
 const GUILD_REPORTS_GQL = `
-query GuildReports($guildName: String!, $guildServerSlug: String!, $guildServerRegion: String!, $start: Float!, $end: Float!) {
+query GuildReports(
+  $guildName: String!, $guildServerSlug: String!, $guildServerRegion: String!,
+  $start: Float!, $end: Float!, $page: Int!, $limit: Int!
+) {
   reportData {
     reports(
       guildName: $guildName
@@ -20,8 +24,8 @@ query GuildReports($guildName: String!, $guildServerSlug: String!, $guildServerR
       guildServerRegion: $guildServerRegion
       startTime: $start
       endTime: $end
-      limit: 25
-      page: 1
+      page: $page
+      limit: $limit
     ) {
       data { code startTime endTime }
       has_more_pages
@@ -30,7 +34,7 @@ query GuildReports($guildName: String!, $guildServerSlug: String!, $guildServerR
 }
 `;
 
-
+/** Fights in a report */
 const REPORT_FIGHTS_GQL = `
 query ReportFights($code: String!) {
   reportData {
@@ -41,7 +45,7 @@ query ReportFights($code: String!) {
 }
 `;
 
-// Presence on boss KILLS if character appears in DamageDone OR Healing tables (no damage taken/active time math)
+/** Presence on boss-kill fights: Damage OR Healing (no damage taken / active-time math) */
 const REPORT_DMG_TABLE_GQL = `
 query DamageTable($code: String!, $fightIDs: [Int]!) {
   reportData {
@@ -77,27 +81,40 @@ function isTueOrThuLocal(msUTC, tz) {
   const day = fmt.format(new Date(msUTC)).toLowerCase();
   return day.startsWith('tue') || day.startsWith('thu');
 }
-
 function dateKeyLocal(msUTC, tz) {
   const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
   return fmt.format(new Date(msUTC)); // yyyy-mm-dd
 }
 
+/** Pull *all* pages of reports in the window */
+async function fetchAllReports(start, end) {
+  const all = [];
+  let page = 1;
+  const limit = 100; // plenty high to minimize page turns
+  while (true) {
+    const vars = {
+      guildName: GUILD.name,
+      guildServerSlug: GUILD.serverSlug,
+      guildServerRegion: GUILD.serverRegion,
+      start, end, page, limit
+    };
+    const data = await wclQuery(GUILD_REPORTS_GQL, vars);
+    const chunk = data?.reportData?.reports?.data ?? [];
+    all.push(...chunk);
+    const more = data?.reportData?.reports?.has_more_pages;
+    if (!more) break;
+    page += 1;
+  }
+  return all;
+}
+
 // GET /api/attendance/refresh
-router.get('/refresh', async (req, res) => {
+router.get('/refresh', async (_req, res) => {
   try {
     const { start, end } = sixWeeksRange();
 
-    // 1) Get guild reports
-	const vars = {
-	guildName: GUILD.name,
-	guildServerSlug: GUILD.serverSlug,
-	guildServerRegion: GUILD.serverRegion,
-	start, end
-				};
-	const data = await wclQuery(GUILD_REPORTS_GQL, vars);
-	const reports = data.reportData?.reports?.data ?? [];
-
+    // 1) Get *all* reports for the window (paginated)
+    const reports = await fetchAllReports(start, end);
 
     // 2) Only Tuesday/Thursday by server time (America/Chicago)
     const filtered = reports.filter(r => isTueOrThuLocal(r.startTime, TIMEZONE));
@@ -106,7 +123,7 @@ router.get('/refresh', async (req, res) => {
     for (const r of filtered) {
       // 3) Boss kill fights only
       const fightsData = await wclQuery(REPORT_FIGHTS_GQL, { code: r.code });
-      const fights = fightsData.reportData?.report?.fights ?? [];
+      const fights = fightsData?.reportData?.report?.fights ?? [];
       const killFights = fights.filter(f => f.boss && f.kill);
       if (!killFights.length) continue;
       const killIDs = killFights.map(f => f.id);
@@ -118,11 +135,11 @@ router.get('/refresh', async (req, res) => {
       ]);
 
       const presentSet = new Set();
-      for (const e of (dmg.reportData?.report?.table?.entries ?? [])) {
+      for (const e of (dmg?.reportData?.report?.table?.entries ?? [])) {
         const name = (e.name || '').trim();
         if (name) presentSet.add(name);
       }
-      for (const e of (heal.reportData?.report?.table?.entries ?? [])) {
+      for (const e of (heal?.reportData?.report?.table?.entries ?? [])) {
         const name = (e.name || '').trim();
         if (name) presentSet.add(name);
       }
