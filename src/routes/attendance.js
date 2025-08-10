@@ -110,15 +110,28 @@ async function fetchAllReports(start, end) {
   return all;
 }
 
-// Helper to safely extract entries from a JSON table response
+// Helper to safely extract entries from a JSON table response — handle several shapes
 function extractEntries(tableJson) {
   if (!tableJson) return [];
+  // Common shapes
   if (Array.isArray(tableJson.entries)) return tableJson.entries;
   if (tableJson.data && Array.isArray(tableJson.data.entries)) return tableJson.data.entries;
+  // Sometimes wrapped in a series
+  if (Array.isArray(tableJson.series) && tableJson.series.length) {
+    for (const s of tableJson.series) {
+      if (s && Array.isArray(s.entries)) return s.entries;
+      if (s && s.data && Array.isArray(s.data.entries)) return s.data.entries;
+    }
+  }
+  // Last resort: scan shallow arrays for objects that look like entries
+  for (const k of Object.keys(tableJson)) {
+    const v = tableJson[k];
+    if (Array.isArray(v) && v.length && typeof v[0] === 'object' && 'name' in v[0]) return v;
+  }
   return [];
 }
 
-// Keep likely players: explicit type Player OR no type provided (common in some table shapes)
+// Keep likely players: explicit type Player OR no type provided
 const filterPlayers = (entries) => Array.isArray(entries)
   ? entries.filter(e => e && (e.type === "Player" || e.type == null) && e.name)
   : [];
@@ -130,9 +143,11 @@ const knownNPCs = new Set([
 ]);
 
 // GET /api/attendance/refresh
-router.get('/refresh', async (_req, res) => {
+router.get('/refresh', async (req, res) => {
   try {
     const { start, end } = sixWeeksRange();
+    const debug = req.query && (req.query.debug === '1' || req.query.debug === 'true');
+    const debugSamples = [];
 
     // 1) Get *all* reports for the window (paginated)
     const reports = await fetchAllReports(start, end);
@@ -154,8 +169,23 @@ router.get('/refresh', async (_req, res) => {
         wclQuery(REPORT_HEAL_TABLE_GQL, { code: r.code, fightIDs: killIDs })
       ]);
 
-      const dmgEntries = filterPlayers(extractEntries(dmg?.reportData?.report?.table));
-      const healEntries = filterPlayers(extractEntries(heal?.reportData?.report?.table));
+      const dmgTable = dmg?.reportData?.report?.table || null;
+      const healTable = heal?.reportData?.report?.table || null;
+
+      if (debug) {
+        debugSamples.push({
+          code: r.code,
+          dateKey: dateKeyLocal(r.startTime, TIMEZONE),
+          killIDs,
+          dmgKeys: dmgTable ? Object.keys(dmgTable) : null,
+          healKeys: healTable ? Object.keys(healTable) : null,
+          dmgSample: dmgTable ? JSON.stringify(dmgTable).slice(0, 1200) : null,
+          healSample: healTable ? JSON.stringify(healTable).slice(0, 1200) : null
+        });
+      }
+
+      const dmgEntries = filterPlayers(extractEntries(dmgTable));
+      const healEntries = filterPlayers(extractEntries(healTable));
 
       const presentSet = new Set();
       for (const e of dmgEntries) {
@@ -207,7 +237,19 @@ router.get('/refresh', async (_req, res) => {
       lastSeen: s.lastSeen
     })).sort((a, b) => b.pct - a.pct || b.attended - a.attended);
 
-    res.json({ nights: Array.from(dateSet).sort(), rows });
+    const payload = { nights: Array.from(dateSet).sort(), rows };
+
+    if (debug) {
+      payload.__debug = true;
+      payload.samples = debugSamples.slice(0, 3);
+      if (debugSamples.length) {
+        console.log('[ATTEND DEBUG]', JSON.stringify(debugSamples[0], null, 2));
+      } else {
+        console.log('[ATTEND DEBUG] no samples');
+      }
+    }
+
+    return res.json(payload);
   } catch (e) {
     res.status(500).json({ error: e.message || String(e) });
   }
