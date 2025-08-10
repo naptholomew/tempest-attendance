@@ -74,6 +74,54 @@
     <div id="alt-msg" class="muted"></div>
   </div>
 
+
+
+<!-- Excluded Dates (skip-count nights) -->
+<section id="excluded-dates" style="margin-top: 1.5rem; padding: 1rem; border: 1px solid #333; border-radius: 12px;">
+  <h2 style="margin: 0 0 .75rem 0; font-size: 1.25rem;">Excluded Dates</h2>
+  <p style="margin: 0 0 1rem 0; color: #999;">
+    Nights listed here are ignored for attendance “possible” counts and cannot give/lose attendance.
+  </p>
+
+  <!-- Token (used if your page doesn't already have one). Saved in localStorage. -->
+  <div style="display:flex; gap:.5rem; align-items:center; margin-bottom:.75rem;">
+    <label for="exToken" style="min-width: 6rem;">Admin Token</label>
+    <input id="exToken" type="password" placeholder="ATTEND_ADMIN_TOKEN"
+           style="flex:1; padding:.5rem; border-radius:8px; border:1px solid #444;" />
+    <button id="exSaveTokenBtn" type="button"
+            style="padding:.5rem .75rem; border-radius:8px; border:1px solid #444; background:#222; color:#fff;">
+      Save
+    </button>
+  </div>
+
+  <!-- Add form -->
+  <div style="display:flex; gap:.5rem; align-items:center; margin-bottom: .75rem;">
+    <input id="exDate" type="date" style="padding:.5rem; border-radius:8px; border:1px solid #444;" />
+    <input id="exReason" type="text" placeholder="Reason (optional)"
+           style="flex:1; padding:.5rem; border-radius:8px; border:1px solid #444;" />
+    <button id="exAddBtn" type="button"
+            style="padding:.5rem .75rem; border-radius:8px; border:1px solid #444; background:#2d6cdf; color:#fff;">
+      Add
+    </button>
+  </div>
+
+  <!-- List -->
+  <div id="exListWrap" style="max-height: 18rem; overflow:auto; border:1px solid #333; border-radius:10px;">
+    <table style="width:100%; border-collapse:collapse; font-size: 14px;">
+      <thead style="background:#141414; color:#aaa;">
+        <tr>
+          <th style="text-align:left; padding:.5rem .75rem; border-bottom:1px solid #333;">Date</th>
+          <th style="text-align:left; padding:.5rem .75rem; border-bottom:1px solid #333;">Reason</th>
+          <th style="text-align:right; padding:.5rem .75rem; border-bottom:1px solid #333;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="exListBody"></tbody>
+    </table>
+  </div>
+
+  <div id="exMsg" style="margin-top:.75rem; color:#aaa;"></div>
+</section>
+
   <script>
     const $ = (id) => document.getElementById(id);
 
@@ -121,5 +169,149 @@
     // Default the backend URL to current origin if served from same host
     document.getElementById('base').value = location.origin.includes('localhost') ? 'http://localhost:4000' : location.origin;
   </script>
+  
+  <script>
+(function () {
+  const base = `${location.origin}/api/attendance`;
+  const qs = (sel) => document.querySelector(sel);
+
+  // If your page already has a global token input, this tries to reuse it:
+  const existingTokenField = qs('#adminToken') || qs('#token');
+
+  const els = {
+    token: qs('#exToken'),
+    saveTokenBtn: qs('#exSaveTokenBtn'),
+    date: qs('#exDate'),
+    reason: qs('#exReason'),
+    addBtn: qs('#exAddBtn'),
+    listBody: qs('#exListBody'),
+    msg: qs('#exMsg'),
+  };
+
+  // Load/save token (localStorage, or mirror from existing field if present)
+  function getToken() {
+    const fromExisting = existingTokenField && existingTokenField.value.trim();
+    if (fromExisting) return fromExisting;
+    return localStorage.getItem('ATTEND_ADMIN_TOKEN') || (els.token && els.token.value.trim()) || '';
+  }
+  function setToken(t) {
+    if (els.token) els.token.value = t || '';
+    localStorage.setItem('ATTEND_ADMIN_TOKEN', t || '');
+  }
+
+  // UI helpers
+  function setMsg(text, ok = true) {
+    if (!els.msg) return;
+    els.msg.textContent = text || '';
+    els.msg.style.color = ok ? '#a5ffa5' : '#ffb4b4';
+  }
+  function rowHTML(dateKey, reason) {
+    return `
+      <tr>
+        <td style="padding:.5rem .75rem; border-bottom:1px solid #222;">${dateKey}</td>
+        <td style="padding:.5rem .75rem; border-bottom:1px solid #222;">${reason || ''}</td>
+        <td style="padding:.5rem .75rem; border-bottom:1px solid #222; text-align:right;">
+          <button data-date="${dateKey}" class="ex-remove"
+                  style="padding:.35rem .6rem; border-radius:8px; border:1px solid #444; background:#8b1e1e; color:#fff;">
+            Remove
+          </button>
+        </td>
+      </tr>
+    `;
+  }
+
+  async function loadExcluded() {
+    try {
+      const res = await fetch(`${base}/excluded`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`GET excluded: ${res.status}`);
+      const json = await res.json();
+      const dates = (json && json.dates) || [];
+      els.listBody.innerHTML = dates.length
+        ? dates.map(d => rowHTML(d.dateKey, d.reason)).join('')
+        : '<tr><td colspan="3" style="padding:.75rem;">No excluded dates.</td></tr>';
+      // wire remove buttons
+      els.listBody.querySelectorAll('.ex-remove').forEach(btn => {
+        btn.addEventListener('click', () => removeExcluded(btn.getAttribute('data-date')));
+      });
+    } catch (e) {
+      console.error(e);
+      setMsg('Failed to load excluded dates.', false);
+    }
+  }
+
+  async function addExcluded() {
+    const dateKey = (els.date && els.date.value) || '';
+    const reason = (els.reason && els.reason.value) || '';
+    if (!dateKey) return setMsg('Pick a date first.', false);
+
+    const token = getToken();
+    if (!token) return setMsg('Missing admin token.', false);
+
+    try {
+      const res = await fetch(`${base}/excluded`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ dateKey, reason })
+      });
+      if (!res.ok) throw new Error(`POST excluded: ${res.status}`);
+      setMsg(`Excluded ${dateKey}${reason ? ` — ${reason}` : ''}`);
+      els.reason.value = '';
+      await loadExcluded();
+    } catch (e) {
+      console.error(e);
+      setMsg('Failed to add excluded date.', false);
+    }
+  }
+
+  async function removeExcluded(dateKey) {
+    const token = getToken();
+    if (!token) return setMsg('Missing admin token.', false);
+
+    try {
+      const res = await fetch(`${base}/excluded`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ dateKey })
+      });
+      if (!res.ok) throw new Error(`DELETE excluded: ${res.status}`);
+      setMsg(`Removed ${dateKey}`);
+      await loadExcluded();
+    } catch (e) {
+      console.error(e);
+      setMsg('Failed to remove excluded date.', false);
+    }
+  }
+
+  // Wire UI
+  if (els.saveTokenBtn && els.token) {
+    els.saveTokenBtn.addEventListener('click', () => {
+      setToken(els.token.value.trim());
+      setMsg('Admin token saved.');
+    });
+    // Prefill token if we have one
+    const saved = localStorage.getItem('ATTEND_ADMIN_TOKEN');
+    if (saved) els.token.value = saved;
+  }
+
+  if (els.addBtn) els.addBtn.addEventListener('click', addExcluded);
+
+  // Initial load
+  document.addEventListener('DOMContentLoaded', loadExcluded);
+  // Also reload if the existing global token input changes
+  if (existingTokenField) {
+    existingTokenField.addEventListener('change', () => {
+      setMsg('Token updated from global field.');
+      loadExcluded();
+    });
+  }
+})();
+</script>
+
 </body>
 </html>
