@@ -118,8 +118,16 @@ function extractEntries(tableJson) {
   return [];
 }
 
-// Only keep player entries from WCL tables
-const filterPlayers = (entries) => Array.isArray(entries) ? entries.filter(e => e && e.type === "Player") : [];
+// Keep likely players: explicit type Player OR no type provided (common in some table shapes)
+const filterPlayers = (entries) => Array.isArray(entries)
+  ? entries.filter(e => e && (e.type === "Player" || e.type == null) && e.name)
+  : [];
+
+// Known NPC names we never want to count
+const knownNPCs = new Set([
+  "Lieutenant General Andorov",
+  "Kaldorei Elite"
+]);
 
 // GET /api/attendance/refresh
 router.get('/refresh', async (_req, res) => {
@@ -152,19 +160,12 @@ router.get('/refresh', async (_req, res) => {
       const presentSet = new Set();
       for (const e of dmgEntries) {
         const name = (e?.name || '').trim();
-        if (name) presentSet.add(name);
+        if (name && !knownNPCs.has(name)) presentSet.add(name);
       }
       for (const e of healEntries) {
         const name = (e?.name || '').trim();
-        if (name) presentSet.add(name);
+        if (name && !knownNPCs.has(name)) presentSet.add(name);
       }
-
-      // Safety: prune known NPC names if they ever appear
-      const knownNPCs = new Set([
-        "Lieutenant General Andorov",
-        "Kaldorei Elite"
-      ]);
-      for (const npc of knownNPCs) presentSet.delete(npc);
 
       const dateKey = dateKeyLocal(r.startTime, TIMEZONE);
       nights.push({ dateKey, reportCode: r.code, presentSet });
