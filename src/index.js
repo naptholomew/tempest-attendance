@@ -4,7 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
-import attendanceRoutes from './routes/attendance.js';
+import memoryAttendanceRoutes from './routes/attendance.memoryroutes.esm.js';
 import { ensureFiles } from './lib/storage.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -21,7 +21,10 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // Health + API routes
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
-app.use('/api/attendance', attendanceRoutes);
+app.use('/api/attendance', memoryAttendanceRoutes({
+adminToken: process.env.ATTEND_ADMIN_TOKEN,   // REQUIRED (set in Render)
+persistFile: process.env.LOCAL_STATE_PATH || '' // OPTIONAL e.g. "./attendance-state.json"
+}));
 
 const PORT = Number(process.env.PORT || 4000);
 app.listen(PORT, () => {
