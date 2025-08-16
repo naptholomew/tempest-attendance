@@ -29,6 +29,16 @@
 <body>
   <h1>⚡ Tempest Attendance Admin</h1>
 
+  <!-- Backup / Restore -->
+  <div class="card">
+    <h2>Backup / Restore</h2>
+    <button id="exportBtn">Export Data</button>
+    <input type="file" id="importFile" style="display:none" />
+    <button id="importBtn">Import Data</button>
+    <div id="importExportMsg" class="muted" style="margin-top:8px"></div>
+  </div>
+
+
   <div class="card">
     <div class="row">
       <div>
@@ -151,6 +161,51 @@
     const $ = (id) => document.getElementById(id);
     function baseUrl() { return $('base').value || location.origin; }
     function token() { return $('token').value.trim(); }
+
+    // ---- IMPORT / EXPORT ----
+    $('exportBtn').addEventListener('click', async () => {
+      try {
+        const r = await fetch(baseUrl() + '/api/attendance/export', {
+          headers: { 'Authorization': 'Bearer ' + token() }
+        });
+        if (!r.ok) throw new Error('Export failed');
+        const json = await r.json();
+        const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'attendance-backup.json';
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        $('importExportMsg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
+    });
+
+    $('importBtn').addEventListener('click', () => $('importFile').click());
+    $('importFile').addEventListener('change', async (ev) => {
+      const file = ev.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        const r = await fetch(baseUrl() + '/api/attendance/import', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token()
+          },
+          body: JSON.stringify(data)
+        });
+        if (!r.ok) throw new Error('Import failed');
+        $('importExportMsg').innerHTML = '<span class="ok">Import successful.</span>';
+        await loadOverrides();
+        await loadAltMap();
+        await loadExcluded();
+      } catch (e) {
+        $('importExportMsg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
+    });
 
     // -------- Overrides ----------
     async function loadOverrides() {

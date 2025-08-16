@@ -343,4 +343,26 @@ router.delete('/alt-map', express.json(), (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- IMPORT / EXPORT ----
+
+router.get('/export', (req, res) => {
+  res.json({
+    overrides: state.overrides || [],
+    altMap: state.altMap || [],
+    excluded: state.excluded || []
+  });
+});
+
+router.post('/import', (req, res) => {
+  try {
+    const { overrides, altMap, excluded } = req.body;
+    if (overrides) state.overrides = overrides;
+    if (altMap) state.altMap = altMap;
+    if (excluded) state.excluded = excluded;
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 export default router;
