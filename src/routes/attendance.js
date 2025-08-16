@@ -7,33 +7,45 @@ import { readAltMap, readOverrides, writeOverrides, writeAltMap } from '../lib/s
 
 const router = express.Router();
 
-// ------------ data dir (for excluded.json + latest cache) ------------
+// ------------ data dir (align with storage.js root ./data) ------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const EXCLUDED_PATH = path.join(DATA_DIR, 'excluded.json');
+const ROOT = path.resolve(__dirname, '../../');                  // project root
+const DATA_DIR = path.join(ROOT, 'data');                        // ./data
+const EXCLUDED_PATH = path.join(DATA_DIR, 'excluded_dates.json'); // ARRAY file written by memory router
 const LATEST_PATH = path.join(DATA_DIR, 'attendance.latest.json');
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(EXCLUDED_PATH)) fs.writeFileSync(EXCLUDED_PATH, JSON.stringify({}, null, 2));
+  // don't auto-create EXCLUDED_PATH with {} (object); we want an Array shape.
 }
-function readExcluded() {
+
+function readExcludedArray() {
   ensureDataDir();
-  try { return JSON.parse(fs.readFileSync(EXCLUDED_PATH, 'utf-8')) || {}; }
-  catch { return {}; }
+  try {
+    const txt = fs.readFileSync(EXCLUDED_PATH, 'utf-8');
+    const arr = JSON.parse(txt);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
 }
-function writeExcluded(obj) {
+function writeExcludedArray(arr) {
   ensureDataDir();
-  fs.writeFileSync(EXCLUDED_PATH, JSON.stringify(obj, null, 2));
+  fs.writeFileSync(EXCLUDED_PATH, JSON.stringify(Array.isArray(arr) ? arr : [], null, 2), 'utf-8');
 }
+
 function readLatest() {
   try { return JSON.parse(fs.readFileSync(LATEST_PATH, 'utf-8')); }
   catch { return null; }
 }
 function writeLatest(payload) {
   ensureDataDir();
-  fs.writeFileSync(LATEST_PATH, JSON.stringify({ ...payload, _cachedAt: new Date().toISOString() }, null, 2));
+  fs.writeFileSync(
+    LATEST_PATH,
+    JSON.stringify({ ...payload, _cachedAt: new Date().toISOString() }, null, 2),
+    'utf-8'
+  );
 }
 
 // ------------ guild & timezone ------------
@@ -132,26 +144,28 @@ function isPlayerEntry(e) {
 // ------------ compute + cache payload ------------
 async function computePayload() {
   const { start, end } = sixWeeksRange();
-  const excluded = readExcluded();
+  const excludedArr = readExcludedArray();                           // [{ dateKey, reason? }]
+  const excludedSet = new Set(excludedArr.map(e => String(e?.dateKey || '')));
   const reports = await fetchAllReports(start, end);
 
-  // Group by Central date; keep only Tue/Thu; skip excluded
+  // Group by local date; keep only Tue/Thu; skip excluded
   const grouped = new Map(); // dateKey -> reports[]
   for (const r of reports) {
     if (!isTueOrThuLocal(r.startTime, TIMEZONE)) continue;
     const dkey = dateKeyLocal(r.startTime, TIMEZONE);
-    if (excluded[dkey]) continue;
+    if (excludedSet.has(dkey)) continue;
     if (!grouped.has(dkey)) grouped.set(dkey, []);
     grouped.get(dkey).push(r);
   }
 
   const nightKeys = Array.from(grouped.keys()).sort();
-  const altMap = readAltMap();
-  const overridesAll = readOverrides();
+  const altMap = readAltMap();               // { alt: main }
+  const overridesAll = readOverrides();      // { [dateKey]: { [name]: fractional } }
 
   const perNight = []; // { dateKey, presentMain:Set<string>, nightOverrides }
   for (const dateKey of nightKeys) {
     const presentSet = new Set();
+
     for (const r of grouped.get(dateKey) || []) {
       const fightsData = await wclQuery(REPORT_FIGHTS_GQL, { code: r.code });
       const fights = fightsData?.reportData?.report?.fights ?? [];
@@ -214,7 +228,8 @@ async function computePayload() {
     lastSeen: s.lastSeen
   })).sort((a, b) => b.pct - a.pct || b.attended - a.attended || a.name.localeCompare(b.name));
 
-  return { nights: nightKeys, rows, perPlayerDates, excluded };
+  // Return excluded as array for transparency
+  return { nights: nightKeys, rows, perPlayerDates, excluded: excludedArr };
 }
 
 // ------------ routes ------------
@@ -237,10 +252,10 @@ router.get('/refresh', async (_req, res) => {
   }
 });
 
-// -------- Excluded Dates --------
+// -------- Excluded Dates (legacy router version; uses the array file) --------
 router.get('/excluded', (_req, res) => {
-  const ex = readExcluded();
-  res.json({ dates: Object.entries(ex).map(([dateKey, reason]) => ({ dateKey, reason })) });
+  const exArr = readExcludedArray(); // [{dateKey, reason}]
+  res.json({ dates: exArr });
 });
 router.post('/excluded', express.json(), (req, res) => {
   if (req.get('authorization') !== `Bearer ${process.env.ATTEND_ADMIN_TOKEN}`) {
@@ -248,12 +263,13 @@ router.post('/excluded', express.json(), (req, res) => {
   }
   const { dateKey, reason } = req.body || {};
   if (!dateKey) return res.status(400).json({ error: 'dateKey required (YYYY-MM-DD)' });
-  const ex = readExcluded();
-  ex[dateKey] = reason || 'Excluded';
-  writeExcluded(ex);
-  // Updating exclusions changes possible nights; recompute cache quickly
+  const exArr = readExcludedArray();
+  const idx = exArr.findIndex(d => String(d.dateKey) === String(dateKey));
+  const row = { dateKey: String(dateKey), reason: reason || 'Excluded' };
+  if (idx >= 0) exArr[idx] = row; else exArr.push(row);
+  writeExcludedArray(exArr);
   computePayload().then(writeLatest).catch(()=>{});
-  res.json({ ok: true, dateKey, reason: ex[dateKey] });
+  res.json({ ok: true, dateKey: row.dateKey, reason: row.reason });
 });
 router.delete('/excluded', express.json(), (req, res) => {
   if (req.get('authorization') !== `Bearer ${process.env.ATTEND_ADMIN_TOKEN}`) {
@@ -261,8 +277,9 @@ router.delete('/excluded', express.json(), (req, res) => {
   }
   const { dateKey } = req.body || {};
   if (!dateKey) return res.status(400).json({ error: 'dateKey required' });
-  const ex = readExcluded();
-  if (ex[dateKey]) { delete ex[dateKey]; writeExcluded(ex); }
+  const exArr = readExcludedArray();
+  const next = exArr.filter(d => String(d.dateKey) !== String(dateKey));
+  writeExcludedArray(next);
   computePayload().then(writeLatest).catch(()=>{});
   res.json({ ok: true });
 });
@@ -343,25 +360,28 @@ router.delete('/alt-map', express.json(), (req, res) => {
   res.json({ ok: true });
 });
 
-// ---- IMPORT / EXPORT ----
-
-router.get('/export', (req, res) => {
-  res.json({
-    overrides: state.overrides || [],
-    altMap: state.altMap || [],
-    excluded: state.excluded || []
-  });
+// ---- IMPORT / EXPORT (safe, no undefined state) ----
+router.get('/export', (_req, res) => {
+  const overrides = readOverrides();              // object
+  const altMap = readAltMap();                    // object
+  const excluded = readExcludedArray();           // array
+  res.json({ overrides, altMap, excluded });
 });
 
-router.post('/import', (req, res) => {
+router.post('/import', express.json(), (req, res) => {
   try {
-    const { overrides, altMap, excluded } = req.body;
-    if (overrides) state.overrides = overrides;
-    if (altMap) state.altMap = altMap;
-    if (excluded) state.excluded = excluded;
+    if (req.get('authorization') !== `Bearer ${process.env.ATTEND_ADMIN_TOKEN}`) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+    const { overrides, altMap, excluded } = req.body || {};
+    if (overrides && typeof overrides === 'object') writeOverrides(overrides);
+    if (altMap && typeof altMap === 'object') writeAltMap(altMap);
+    if (Array.isArray(excluded)) writeExcludedArray(excluded);
+    // Recompute cache after import
+    computePayload().then(writeLatest).catch(()=>{});
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: err?.message || String(err) });
   }
 });
 
