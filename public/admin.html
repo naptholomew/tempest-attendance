@@ -3,54 +3,37 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tempest Attendance Admin — Refactored</title>
+  <title>Tempest Attendance Admin — Refactored (Compat)</title>
   <style>
-    :root{
-      --bg:#0b0b0c; --card:#15161a; --ink:#eaeaea; --muted:#9aa0a6; --line:#25262b;
-      --accent:#6cc4ff; --danger:#e05454; --ok:#6fe07a;
-    }
+    :root{ --bg:#0b0b0c; --card:#15161a; --ink:#eaeaea; --muted:#9aa0a6; --line:#25262b; --accent:#6cc4ff; --danger:#e05454; --ok:#6fe07a; }
     *, *::before, *::after { box-sizing: border-box; }
     html, body { height:100%; }
-    body {
-      margin:0; padding:24px;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji','Segoe UI Emoji';
-      background: var(--bg); color: var(--ink);
-      line-height: 1.35;
-    }
-    h1{ margin:0 0 16px; font-weight:700; letter-spacing:.2px; }
-    h2{ margin:.25rem 0 1rem; font-size: 1rem; font-weight:600; color:var(--accent); }
+    body { margin:0; padding:24px; font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Helvetica Neue',Arial; background:var(--bg); color:var(--ink); line-height:1.35; }
+    h1{ margin:0 0 16px; font-weight:700; }
+    h2{ margin:.25rem 0 1rem; font-size:1rem; font-weight:600; color:var(--accent); }
     .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:16px; }
     .row{ display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px 16px; }
     .field label{ display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
-    .field input{
-      width:100%; padding:9px 11px; border-radius:10px;
-      border:1px solid #2b2c31; background:#101115; color:var(--ink);
-    }
+    .field input{ width:100%; padding:9px 11px; border-radius:10px; border:1px solid #2b2c31; background:#101115; color:var(--ink); }
     .buttons{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; }
-    button{
-      padding:9px 12px; border-radius:10px; border:1px solid #2b2c31;
-      background:#1b1c21; color:var(--ink); cursor:pointer;
-    }
+    button{ padding:9px 12px; border-radius:10px; border:1px solid #2b2c31; background:#1b1c21; color:var(--ink); cursor:pointer; }
     button:hover{ background:#23242a; }
     .danger{ background:#8b1e1e; color:#fff; border-color:#662; }
     .muted{ color:var(--muted); font-size:12px; }
-    .ok{ color:var(--ok); }
-    .err{ color:var(--danger); }
-    .tablewrap{ max-height: 18rem; overflow:auto; border:1px solid #333; border-radius:10px; margin-top:10px; }
-    table{ width:100%; border-collapse: collapse; font-size:14px; table-layout: fixed; }
-    thead{ background:#141414; color:#aaa; position: sticky; top:0; }
-    th,td{ padding:.55rem .75rem; border-bottom:1px solid #222; word-wrap: break-word; }
-    th{text-align:left;}
-    td.actions{ text-align:right; }
-    code{ background:#101115; border:1px solid #2b2c31; border-radius:6px; padding:2px 6px; }
+    .ok{ color:var(--ok); } .err{ color:var(--danger); }
+    .tablewrap{ max-height:18rem; overflow:auto; border:1px solid #333; border-radius:10px; margin-top:10px; }
+    table{ width:100%; border-collapse:collapse; font-size:14px; table-layout:fixed; }
+    thead{ background:#141414; color:#aaa; position:sticky; top:0; }
+    th,td{ padding:.55rem .75rem; border-bottom:1px solid #222; word-wrap:break-word; }
+    th{text-align:left;} td.actions{text-align:right;}
     @media (max-width:420px){ body{ padding:16px; } }
   </style>
 </head>
 <body>
   <h1>⚡ Tempest Attendance Admin</h1>
 
-  <section class="card" aria-labelledby="backup-title">
-    <h2 id="backup-title">Backup / Restore</h2>
+  <section class="card">
+    <h2>Backup / Restore</h2>
     <div class="buttons">
       <button id="exportBtn" type="button">Export JSON</button>
       <input type="file" id="importFile" accept="application/json" style="display:none" />
@@ -59,8 +42,8 @@
     </div>
   </section>
 
-  <section class="card" aria-labelledby="conn-title">
-    <h2 id="conn-title">Connection & Auth</h2>
+  <section class="card">
+    <h2>Connection & Auth</h2>
     <div class="row">
       <div class="field">
         <label for="base">Backend URL</label>
@@ -74,8 +57,8 @@
     <p class="muted" style="margin-top:8px">Token must match server <code>ATTEND_ADMIN_TOKEN</code>.</p>
   </section>
 
-  <section class="card" aria-labelledby="ov-title">
-    <h2 id="ov-title">Manual Attendance Override</h2>
+  <section class="card">
+    <h2>Manual Attendance Override</h2>
     <div class="row">
       <div class="field">
         <label for="ov-date">Date</label>
@@ -88,7 +71,7 @@
     </div>
     <div class="row" style="margin-top:12px">
       <div class="field">
-        <label for="ov-frac">Fractional (0 – 1)</label>
+        <label for="ov-frac">Fractional (0–1)</label>
         <input id="ov-frac" type="number" step="0.5" min="0" max="1" value="1" autocomplete="off">
       </div>
     </div>
@@ -97,7 +80,7 @@
       <span id="ov-msg" class="muted"></span>
     </div>
 
-    <div class="tablewrap" id="ov-tablewrap">
+    <div class="tablewrap">
       <table>
         <thead><tr><th>Date</th><th>Player</th><th>Fractional</th><th class="actions">Actions</th></tr></thead>
         <tbody id="ov-list"></tbody>
@@ -105,8 +88,8 @@
     </div>
   </section>
 
-  <section class="card" aria-labelledby="alt-title">
-    <h2 id="alt-title">Link Alt → Main</h2>
+  <section class="card">
+    <h2>Link Alt → Main</h2>
     <div class="row">
       <div class="field">
         <label for="alt">Alt Name</label>
@@ -122,7 +105,7 @@
       <span id="alt-msg" class="muted"></span>
     </div>
 
-    <div class="tablewrap" id="alt-tablewrap">
+    <div class="tablewrap">
       <table>
         <thead><tr><th>Alt</th><th>Main</th><th class="actions">Actions</th></tr></thead>
         <tbody id="alt-list"></tbody>
@@ -130,8 +113,8 @@
     </div>
   </section>
 
-  <section class="card" aria-labelledby="ex-title">
-    <h2 id="ex-title">Excluded Dates</h2>
+  <section class="card">
+    <h2>Excluded Dates</h2>
     <p class="muted" style="margin:0 0 1rem">Nights listed here are ignored for attendance “possible” counts and cannot give/lose attendance.</p>
     <div class="row" style="align-items:end">
       <div class="field">
@@ -148,7 +131,7 @@
       <span id="exMsg" class="muted"></span>
     </div>
 
-    <div class="tablewrap" id="exListWrap">
+    <div class="tablewrap">
       <table>
         <thead><tr><th>Date</th><th>Reason</th><th class="actions">Actions</th></tr></thead>
         <tbody id="exListBody"></tbody>
@@ -160,17 +143,18 @@
     const $ = (id) => document.getElementById(id);
     const on = (el, ev, fn) => el.addEventListener(ev, fn);
 
-    const apiBase = () => {
-      const raw = $('base').value || location.origin;
+    function apiRoot() {
+      let raw = ($('base').value || location.origin).trim();
+      if (/\/api\/attendance\/?$/.test(raw)) return raw.replace(/\/$/, '');
       return raw.replace(/\/$/, '') + '/api/attendance';
-    };
+    }
     const adminBearer = () => $('token').value.trim();
 
     async function api(path, { method='GET', json=null, auth=false } = {}) {
       const headers = {};
       if (json !== null) headers['Content-Type'] = 'application/json';
       if (auth) headers['Authorization'] = 'Bearer ' + adminBearer();
-      const res = await fetch(apiBase() + path, { method, headers, body: json ? JSON.stringify(json) : undefined, cache: 'no-store' });
+      const res = await fetch(apiRoot() + path, { method, headers, body: json ? JSON.stringify(json) : undefined, cache: 'no-store' });
       const text = await res.text();
       let data; try { data = text ? JSON.parse(text) : null; } catch { data = null; }
       if (!res.ok || (data && data.error)) {
@@ -181,150 +165,116 @@
     }
 
     async function exportJSON() {
+      $('importExportMsg').textContent = '';
       try {
-        let data = await api('/state'); // preferred
-        downloadJSON(data, 'attendance-backup.json');
-        $('importExportMsg').textContent = 'Export successful.';
-      } catch (e1) {
-        try {
-          let data = await api('/export', { auth:true }); // legacy fallback
-          downloadJSON(data, 'attendance-backup.json');
-          $('importExportMsg').textContent = 'Export successful.';
-        } catch (e2) {
-          $('importExportMsg').innerHTML = '<span class="err">Export failed: ' + e2.message + '</span>';
+        const data = await api('/state');
+        return downloadJSON(data, 'attendance-backup.json');
+      } catch (e1) {}
+      try {
+        const url = apiRoot() + '/export';
+        const res = await fetch(url, {
+          headers: { 'Authorization': 'Bearer ' + adminBearer() },
+          cache: 'no-store'
+        });
+        if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const data = await res.json();
+          return downloadJSON(data, 'attendance-backup.json');
+        } else {
+          const blob = await res.blob();
+          return downloadBlob(blob, 'attendance-backup.json');
         }
+      } catch (e2) {}
+      try {
+        const url = apiRoot() + '/export';
+        const res = await fetch(url, {
+          headers: { 'x-admin-token': adminBearer() },
+          cache: 'no-store'
+        });
+        if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const data = await res.json();
+          return downloadJSON(data, 'attendance-backup.json');
+        } else {
+          const blob = await res.blob();
+          return downloadBlob(blob, 'attendance-backup.json');
+        }
+      } catch (e3) {
+        $('importExportMsg').innerHTML = '<span class="err">Export failed: ' + e3.message + '</span>';
       }
     }
+
     function downloadJSON(obj, filename) {
       const blob = new Blob([JSON.stringify(obj, null, 2)], { type:'application/json' });
+      downloadBlob(blob, filename);
+      $('importExportMsg').innerHTML = '<span class="ok">Export successful.</span>';
+    }
+    function downloadBlob(blob, filename) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
       URL.revokeObjectURL(url);
     }
+
     async function importJSON(file) {
       const text = await file.text();
       let json;
-      try { json = JSON.parse(text); }
-      catch { $('importExportMsg').innerHTML = '<span class="err">Invalid JSON</span>'; return; }
+      try { json = JSON.parse(text); } catch { $('importExportMsg').innerHTML = '<span class="err">Invalid JSON</span>'; return; }
       try {
         await api('/import', { method:'POST', json, auth:true });
         $('importExportMsg').innerHTML = '<span class="ok">Import successful.</span>';
         await Promise.all([loadOverrides(), loadAltMap(), loadExcluded()]);
-      } catch (e) {
-        $('importExportMsg').innerHTML = '<span class="err">Import failed: ' + e.message + '</span>';
-      }
+      } catch (e) { $('importExportMsg').innerHTML = '<span class="err">Import failed: ' + e.message + '</span>'; }
     }
 
     function renderOverrides(list) {
       $('ov-list').innerHTML = list.length
-        ? list.map(o => `
-            <tr>
-              <td>${o.dateKey}</td><td>${o.name}</td><td>${o.fractional}</td>
-              <td class="actions"><button class="danger" data-action="del-ov" data-date="${o.dateKey}" data-name="${o.name}">Remove</button></td>
-            </tr>`).join('')
+        ? list.map(o => `<tr><td>${o.dateKey}</td><td>${o.name}</td><td>${o.fractional}</td>
+            <td class="actions"><button class="danger" data-action="del-ov" data-date="${o.dateKey}" data-name="${o.name}">Remove</button></td></tr>`).join('')
         : '<tr><td colspan="4" class="muted" style="padding:.75rem;">No overrides.</td></tr>';
     }
-    async function loadOverrides() {
-      try {
-        const data = await api('/overrides');
-        renderOverrides(data.overrides || []);
-      } catch (e) {
-        $('ov-msg').innerHTML = '<span class="err">Load failed: ' + e.message + '</span>';
-      }
-    }
+    async function loadOverrides() { try { const d = await api('/overrides'); renderOverrides(d.overrides||[]); } catch(e){ $('ov-msg').innerHTML='<span class="err">Load failed: '+e.message+'</span>'; } }
     async function saveOverride() {
-      const body = {
-        dateKey: $('ov-date').value.trim(),
-        name: $('ov-name').value.trim(),
-        fractional: Number(($('ov-frac').value || '').trim())
-      };
-      if (!body.dateKey || !body.name || Number.isNaN(body.fractional)) {
-        $('ov-msg').innerHTML = '<span class="err">Fill all fields (fractional must be a number)</span>'; return;
-      }
-      try {
-        await api('/override', { method:'POST', json: body, auth:true });
-        $('ov-msg').innerHTML = '<span class="ok">Saved.</span>';
-        await loadOverrides();
-      } catch (e) { $('ov-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>'; }
+      const body = { dateKey:$('ov-date').value.trim(), name:$('ov-name').value.trim(), fractional:Number(($('ov-frac').value||'').trim()) };
+      if (!body.dateKey || !body.name || Number.isNaN(body.fractional)) { $('ov-msg').innerHTML='<span class="err">Fill all fields (fractional must be a number)</span>'; return; }
+      try { await api('/override', { method:'POST', json:body, auth:true }); $('ov-msg').innerHTML='<span class="ok">Saved.</span>'; await loadOverrides(); } catch(e){ $('ov-msg').innerHTML='<span class="err">Error: '+e.message+'</span>'; }
     }
-    async function deleteOverride(dateKey, name) {
-      try {
-        await api('/override', { method:'DELETE', json:{ dateKey, name }, auth:true });
-        await loadOverrides();
-      } catch (e) { $('ov-msg').innerHTML = '<span class="err">Delete failed: ' + e.message + '</span>'; }
-    }
+    async function deleteOverride(dateKey,name){ try{ await api('/override',{method:'DELETE',json:{dateKey,name},auth:true}); await loadOverrides(); }catch(e){ $('ov-msg').innerHTML='<span class="err">Delete failed: '+e.message+'</span>'; }}
 
-    function renderAltMap(links) {
+    function renderAltMap(links){
       $('alt-list').innerHTML = links.length
-        ? links.map(l => `
-            <tr>
-              <td>${l.alt}</td><td>${l.main}</td>
-              <td class="actions"><button class="danger" data-action="del-alt" data-alt="${l.alt}">Remove</button></td>
-            </tr>`).join('')
+        ? links.map(l=>`<tr><td>${l.alt}</td><td>${l.main}</td>
+            <td class="actions"><button class="danger" data-action="del-alt" data-alt="${l.alt}">Remove</button></td></tr>`).join('')
         : '<tr><td colspan="3" class="muted" style="padding:.75rem;">No links.</td></tr>';
     }
-    async function loadAltMap() {
-      try { const data = await api('/alt-map'); renderAltMap(data.links || []); }
-      catch (e) { $('alt-msg').innerHTML = '<span class="err">Load failed: ' + e.message + '</span>'; }
-    }
-    async function saveAlt() {
-      const alt = $('alt').value.trim(), main = $('main').value.trim();
-      if (!alt || !main) { $('alt-msg').innerHTML = '<span class="err">Provide both alt and main.</span>'; return; }
-      try {
-        await api('/alt-map', { method:'POST', json:{ alt, main }, auth:true });
-        $('alt-msg').innerHTML = '<span class="ok">Saved.</span>'; await loadAltMap();
-      } catch (e) { $('alt-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>'; }
-    }
-    async function deleteAlt(alt) {
-      try { await api('/alt-map', { method:'DELETE', json:{ alt }, auth:true }); await loadAltMap(); }
-      catch (e) { $('alt-msg').innerHTML = '<span class="err">Delete failed: ' + e.message + '</span>'; }
-    }
+    async function loadAltMap(){ try{ const d=await api('/alt-map'); renderAltMap(d.links||[]); }catch(e){ $('alt-msg').innerHTML='<span class="err">Load failed: '+e.message+'</span>'; } }
+    async function saveAlt(){ const alt=$('alt').value.trim(), main=$('main').value.trim(); if(!alt||!main){ $('alt-msg').innerHTML='<span class="err">Provide both alt and main.</span>'; return; } try{ await api('/alt-map',{method:'POST',json:{alt,main},auth:true}); $('alt-msg').innerHTML='<span class="ok">Saved.</span>'; await loadAltMap(); }catch(e){ $('alt-msg').innerHTML='<span class="err">Error: '+e.message+'</span>'; } }
+    async function deleteAlt(alt){ try{ await api('/alt-map',{method:'DELETE',json:{alt},auth:true}); await loadAltMap(); }catch(e){ $('alt-msg').innerHTML='<span class="err">Delete failed: '+e.message+'</span>'; } }
 
-    function renderExcluded(list) {
+    function renderExcluded(list){
       $('exListBody').innerHTML = list.length
-        ? list.map(d => `
-            <tr>
-              <td>${d.dateKey}</td><td>${d.reason || ''}</td>
-              <td class="actions"><button class="danger" data-action="del-ex" data-date="${d.dateKey}">Remove</button></td>
-            </tr>`).join('')
+        ? list.map(d=>`<tr><td>${d.dateKey}</td><td>${d.reason||''}</td>
+            <td class="actions"><button class="danger" data-action="del-ex" data-date="${d.dateKey}">Remove</button></td></tr>`).join('')
         : '<tr><td colspan="3" class="muted" style="padding:.75rem;">No excluded dates.</td></tr>';
     }
-    async function loadExcluded() {
-      try { const data = await api('/excluded'); renderExcluded(data.dates || []); }
-      catch (e) { $('exMsg').innerHTML = '<span class="err">Load failed: ' + e.message + '</span>'; }
-    }
-    async function addExcluded() {
-      const dateKey = $('exDate').value || '', reason = $('exReason').value || '';
-      if (!dateKey) { $('exMsg').innerHTML = '<span class="err">Pick a date first.</span>'; return; }
-      try { await api('/excluded', { method:'POST', json:{ dateKey, reason }, auth:true });
-            $('exMsg').innerHTML = '<span class="ok">Saved.</span>'; $('exReason').value=''; await loadExcluded(); }
-      catch (e) { $('exMsg').innerHTML = '<span class="err">Error: ' + e.message + '</span>'; }
-    }
-    async function deleteExcluded(dateKey) {
-      try { await api('/excluded', { method:'DELETE', json:{ dateKey }, auth:true }); await loadExcluded(); }
-      catch (e) { $('exMsg').innerHTML = '<span class="err">Delete failed: ' + e.message + '</span>'; }
-    }
+    async function loadExcluded(){ try{ const d=await api('/excluded'); renderExcluded(d.dates||[]); }catch(e){ $('exMsg').innerHTML='<span class="err">Load failed: '+e.message+'</span>'; } }
+    async function addExcluded(){ const dateKey=$('exDate').value||'', reason=$('exReason').value||''; if(!dateKey){ $('exMsg').innerHTML='<span class="err">Pick a date first.</span>'; return; } try{ await api('/excluded',{method:'POST',json:{dateKey,reason},auth:true}); $('exMsg').innerHTML='<span class="ok">Saved.</span>'; $('exReason').value=''; await loadExcluded(); }catch(e){ $('exMsg').innerHTML='<span class="err">Error: '+e.message+'</span>'; } }
+    async function deleteExcluded(dateKey){ try{ await api('/excluded',{method:'DELETE',json:{dateKey},auth:true}); await loadExcluded(); }catch(e){ $('exMsg').innerHTML='<span class="err">Delete failed: '+e.message+'</span>'; } }
 
-    on($('ov-list'), 'click', (e) => {
-      const b = e.target.closest('button[data-action="del-ov"]'); if (!b) return;
-      deleteOverride(b.dataset.date, b.dataset.name);
-    });
-    on($('alt-list'), 'click', (e) => {
-      const b = e.target.closest('button[data-action="del-alt"]'); if (!b) return;
-      deleteAlt(b.dataset.alt);
-    });
-    on($('exListBody'), 'click', (e) => {
-      const b = e.target.closest('button[data-action="del-ex"]'); if (!b) return;
-      deleteExcluded(b.dataset.date);
-    });
+    // Delegation
+    on($('ov-list'),'click',(e)=>{const b=e.target.closest('button[data-action="del-ov"]'); if(!b)return; deleteOverride(b.dataset.date,b.dataset.name);});
+    on($('alt-list'),'click',(e)=>{const b=e.target.closest('button[data-action="del-alt"]'); if(!b)return; deleteAlt(b.dataset.alt);});
+    on($('exListBody'),'click',(e)=>{const b=e.target.closest('button[data-action="del-ex"]'); if(!b)return; deleteExcluded(b.dataset.date);});
 
-    on($('exportBtn'), 'click', () => { $('importExportMsg').textContent = ''; exportJSON(); });
-    on($('importBtn'), 'click', () => $('importFile').click());
-    on($('importFile'), 'change', (ev) => { const file = ev.target.files?.[0]; if (file) importJSON(file); });
+    // Wire
+    on($('exportBtn'),'click',exportJSON);
+    on($('importBtn'),'click',()=>$('importFile').click());
+    on($('importFile'),'change',(ev)=>{const f=ev.target.files?.[0]; if(f) importJSON(f);});
 
-    on($('ov-save'), 'click', saveOverride);
-    on($('alt-save'), 'click', saveAlt);
-    on($('exAddBtn'), 'click', addExcluded);
+    on($('ov-save'),'click',saveOverride);
+    on($('alt-save'),'click',saveAlt);
+    on($('exAddBtn'),'click',addExcluded);
 
     $('base').value = location.origin.includes('localhost') ? 'http://localhost:4000' : location.origin;
 
