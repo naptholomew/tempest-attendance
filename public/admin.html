@@ -1,83 +1,371 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>Attendance Admin</title>
+  <meta charset="utf-8" />
+  <title>Tempest Attendance Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: sans-serif; background: #111; color: #eee; padding: 20px; }
-    h1 { color: #6cf; }
-    .row { margin: 0.5em 0; }
-    label { display: inline-block; width: 160px; }
-    input, textarea, select { width: 300px; padding: 4px; }
-    button { margin-left: 164px; margin-top: 0.25em; }
-    .toolbar { margin-top: 1em; padding: 1em; border: 1px solid #444; }
+    body { font-family: system-ui, sans-serif; background:#0b0b0c; color:#eaeaea; padding: 24px; }
+    h1 { margin: 0 0 16px; }
+    .card { background:#15161a; border:1px solid #25262b; border-radius:16px; padding:16px; margin-bottom:16px; }
+    label { display:block; font-size:12px; color:#9aa0a6; margin-bottom:6px; }
+    input { width:100%; padding:8px 10px; border-radius:10px; border:1px solid #2b2c31; background:#101115; color:#eaeaea; }
+    button { margin-top:10px; padding:8px 12px; border-radius:10px; border:1px solid #2b2c31; background:#1b1c21; color:#eaeaea; cursor:pointer; }
+    button:hover { background:#23242a; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .muted { color:#9aa0a6; font-size:12px; }
+    .ok { color:#8bea8b; }
+    .err { color:#ff7a7a; }
+
+    .tablewrap { max-height: 18rem; overflow:auto; border:1px solid #333; border-radius:10px; margin-top:10px; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    thead { background:#141414; color:#aaa; }
+    th, td { padding:.5rem .75rem; border-bottom:1px solid #222; }
+    th { text-align:left; }
+    td.actions { text-align:right; }
+    .danger { background:#8b1e1e; color:#fff; border:1px solid #444; padding:.35rem .6rem; border-radius:8px; }
   </style>
 </head>
 <body>
-  <h1>Tempest Attendance Admin</h1>
+  <h1>⚡ Tempest Attendance Admin</h1>
 
-  <div class="row">
-    <label for="backend">Backend URL:</label>
-    <input id="backend" value="https://tempest-attendance.onrender.com/api/attendance">
-  </div>
-  <div class="row">
-    <label for="token">Admin Token:</label>
-    <input id="token" placeholder="enter ATTEND_ADMIN_TOKEN">
-  </div>
-
-  <div class="toolbar">
-    <strong>Data Management</strong><br>
-    <button onclick="exportState()">Export JSON</button>
-    <button onclick="importState()">Import JSON</button>
-    <input type="file" id="importFile" style="display:none">
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Admin Token</label>
+        <input id="token" placeholder="ATTEND_ADMIN_TOKEN">
+      </div>
+      <div>
+        <label>Backend URL</label>
+        <input id="base" value="" placeholder="http://localhost:4000">
+      </div>
+    </div>
+    <div class="muted" style="margin-top:8px">This token must match the server's <code>ATTEND_ADMIN_TOKEN</code>.</div>
   </div>
 
-  <pre id="log"></pre>
+  <!-- Manual Attendance Override -->
+  <div class="card">
+    <h2>Manual Attendance Override</h2>
+    <div class="row">
+      <div>
+        <label>Date (yyyy-mm-dd)</label>
+        <input id="ov-date" placeholder="2025-08-07">
+      </div>
+      <div>
+        <label>Character Name</label>
+        <input id="ov-name" placeholder="Beeper">
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div>
+        <label>Fractional (e.g., 1, 0.5, 0)</label>
+        <input id="ov-frac" placeholder="1">
+      </div>
+      <div></div>
+    </div>
+    <button id="ov-save">Save Override</button>
+    <div id="ov-msg" class="muted" style="margin-top:8px"></div>
+
+    <!-- Overrides History -->
+    <div class="tablewrap" id="ov-tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Player</th>
+            <th>Fractional</th>
+            <th class="actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="ov-list"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Alt → Main -->
+  <div class="card">
+    <h2>Link Alt → Main</h2>
+    <div class="row">
+      <div>
+        <label>Alt Name</label>
+        <input id="alt" placeholder="Beeperbank">
+      </div>
+      <div>
+        <label>Main Name</label>
+        <input id="main" placeholder="Beeper">
+      </div>
+    </div>
+    <button id="alt-save">Save Link</button>
+    <div id="alt-msg" class="muted" style="margin-top:8px"></div>
+
+    <!-- Links History -->
+    <div class="tablewrap" id="alt-tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Alt</th>
+            <th>Main</th>
+            <th class="actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="alt-list"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Excluded Dates -->
+  <div class="card">
+    <h2>Excluded Dates</h2>
+    <p class="muted" style="margin: 0 0 1rem 0;">
+      Nights listed here are ignored for attendance “possible” counts and cannot give/lose attendance.
+    </p>
+
+    <div class="row" style="align-items:end">
+      <div>
+        <label>Date</label>
+        <input id="exDate" type="date">
+      </div>
+      <div>
+        <label>Reason (optional)</label>
+        <input id="exReason" type="text" placeholder="Holiday: Christmas Eve">
+      </div>
+    </div>
+    <button id="exAddBtn">Add</button>
+    <div id="exMsg" class="muted" style="margin-top:8px"></div>
+
+    <div class="tablewrap" id="exListWrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Reason</th>
+            <th class="actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="exListBody"></tbody>
+      </table>
+    </div>
+  </div>
 
   <script>
-    function log(msg) {
-      document.getElementById('log').textContent += msg + "\n";
-    }
-    async function exportState() {
-      const base = document.getElementById('backend').value;
-      const token = document.getElementById('token').value;
+    const $ = (id) => document.getElementById(id);
+    function baseUrl() { return $('base').value || location.origin; }
+    function token() { return $('token').value.trim(); }
+
+    // -------- Overrides ----------
+    async function loadOverrides() {
       try {
-        const res = await fetch(base + '/export', {
-          headers: { 'x-admin-token': token }
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'attendance-export.json';
-        a.click();
-        log('Export successful');
-      } catch (e) { log('Export failed: ' + e.message); }
-    }
-    function importState() {
-      const input = document.getElementById('importFile');
-      input.onchange = async () => {
-        const file = input.files[0];
-        if (!file) return;
-        const text = await file.text();
-        const base = document.getElementById('backend').value;
-        const token = document.getElementById('token').value;
-        try {
-          const res = await fetch(base + '/import', {
-            method: 'POST',
-            headers: {
-              'x-admin-token': token,
-              'Content-Type': 'application/json'
-            },
-            body: text
+        const r = await fetch(baseUrl() + '/api/attendance/overrides', { cache: 'no-store' });
+        if (!r.ok) throw new Error('GET overrides ' + r.status);
+        const json = await r.json();
+        const list = json.overrides || [];
+        $('ov-list').innerHTML = list.length
+          ? list.map(o => `
+              <tr>
+                <td>${o.dateKey}</td>
+                <td>${o.name}</td>
+                <td>${o.fractional}</td>
+                <td class="actions">
+                  <button class="danger" data-date="${o.dateKey}" data-name="${o.name}">Remove</button>
+                </td>
+              </tr>
+            `).join('')
+          : '<tr><td colspan="4" class="muted" style="padding:.75rem;">No overrides.</td></tr>';
+
+        // wire remove
+        $('ov-list').querySelectorAll('button.danger').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            try {
+              const r = await fetch(baseUrl() + '/api/attendance/override', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() },
+                body: JSON.stringify({ dateKey: btn.dataset.date, name: btn.dataset.name })
+              });
+              if (!r.ok) throw new Error('DELETE override ' + r.status);
+              $('ov-msg').innerHTML = '<span class="ok">Removed.</span>';
+              await loadOverrides();
+            } catch (e) {
+              $('ov-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+            }
           });
-          if (!res.ok) throw new Error(await res.text());
-          log('Import successful');
-        } catch (e) { log('Import failed: ' + e.message); }
-      };
-      input.click();
+        });
+      } catch (e) {
+        $('ov-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
     }
+
+    async function sendOverride() {
+      const url = baseUrl() + '/api/attendance/override';
+      const body = {
+        dateKey: $('ov-date').value.trim(),
+        name: $('ov-name').value.trim(),
+        fractional: Number(($('ov-frac').value || '').trim())
+      };
+      if (!body.dateKey || !body.name || Number.isNaN(body.fractional)) {
+        $('ov-msg').innerHTML = '<span class="err">Fill all fields (fractional must be a number)</span>';
+        return;
+      }
+      try {
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() },
+          body: JSON.stringify(body)
+        });
+        const json = await r.json();
+        if (!r.ok || json.error) throw new Error(json.error || r.statusText);
+        $('ov-msg').innerHTML = '<span class="ok">Saved.</span>';
+        await loadOverrides();
+      } catch (e) {
+        $('ov-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
+    }
+
+    // -------- Alt→Main ----------
+    async function loadAltMap() {
+      try {
+        const r = await fetch(baseUrl() + '/api/attendance/alt-map', { cache: 'no-store' });
+        if (!r.ok) throw new Error('GET alt-map ' + r.status);
+        const json = await r.json();
+        const links = json.links || [];
+        $('alt-list').innerHTML = links.length
+          ? links.map(l => `
+              <tr>
+                <td>${l.alt}</td>
+                <td>${l.main}</td>
+                <td class="actions">
+                  <button class="danger" data-alt="${l.alt}">Remove</button>
+                </td>
+              </tr>
+            `).join('')
+          : '<tr><td colspan="3" class="muted" style="padding:.75rem;">No links.</td></tr>';
+
+        // wire remove
+        $('alt-list').querySelectorAll('button.danger').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            try {
+              const r = await fetch(baseUrl() + '/api/attendance/alt-map', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() },
+                body: JSON.stringify({ alt: btn.dataset.alt })
+              });
+              if (!r.ok) throw new Error('DELETE alt-map ' + r.status);
+              $('alt-msg').innerHTML = '<span class="ok">Removed.</span>';
+              await loadAltMap();
+            } catch (e) {
+              $('alt-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+            }
+          });
+        });
+      } catch (e) {
+        $('alt-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
+    }
+
+    async function sendAlt() {
+      const url = baseUrl() + '/api/attendance/alt-map';
+      const body = { alt: $('alt').value.trim(), main: $('main').value.trim() };
+      if (!body.alt || !body.main) {
+        $('alt-msg').innerHTML = '<span class="err">Provide both alt and main.</span>';
+        return;
+      }
+      try {
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() },
+          body: JSON.stringify(body)
+        });
+        const json = await r.json();
+        if (!r.ok || json.error) throw new Error(json.error || r.statusText);
+        $('alt-msg').innerHTML = '<span class="ok">Saved.</span>';
+        await loadAltMap();
+      } catch (e) {
+        $('alt-msg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
+    }
+
+    // -------- Excluded Dates ----------
+    function exRowHTML(dateKey, reason) {
+      return `
+        <tr>
+          <td>${dateKey}</td>
+          <td>${reason || ''}</td>
+          <td class="actions">
+            <button class="danger" data-date="${dateKey}">Remove</button>
+          </td>
+        </tr>
+      `;
+    }
+
+    async function loadExcluded() {
+      const base = baseUrl() + '/api/attendance';
+      try {
+        const res = await fetch(`${base}/excluded`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`GET excluded: ${res.status}`);
+        const json = await res.json();
+        const dates = (json && json.dates) || [];
+        $('exListBody').innerHTML = dates.length
+          ? dates.map(d => exRowHTML(d.dateKey, d.reason)).join('')
+          : '<tr><td colspan="3" class="muted" style="padding:.75rem;">No excluded dates.</td></tr>';
+
+        $('exListBody').querySelectorAll('button.danger').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const tokenVal = token();
+            try {
+              const res = await fetch(base + '/excluded', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tokenVal}` },
+                body: JSON.stringify({ dateKey: btn.dataset.date })
+              });
+              if (!res.ok) throw new Error(`DELETE excluded: ${res.status}`);
+              $('exMsg').innerHTML = '<span class="ok">Removed.</span>';
+              await loadExcluded();
+            } catch (e) {
+              $('exMsg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+            }
+          });
+        });
+      } catch (e) {
+        $('exMsg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
+    }
+
+    async function addExcluded() {
+      const base = baseUrl() + '/api/attendance';
+      const dateKey = $('exDate').value || '';
+      const reason = $('exReason').value || '';
+      if (!dateKey) { $('exMsg').innerHTML = '<span class="err">Pick a date first.</span>'; return; }
+      try {
+        const res = await fetch(base + '/excluded', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token()}`
+          },
+          body: JSON.stringify({ dateKey, reason })
+        });
+        if (!res.ok) throw new Error(`POST excluded: ${res.status}`);
+        $('exMsg').innerHTML = '<span class="ok">Saved.</span>';
+        $('exReason').value = '';
+        await loadExcluded();
+      } catch (e) {
+        $('exMsg').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+      }
+    }
+
+    // Wire top buttons
+    document.getElementById('ov-save').addEventListener('click', sendOverride);
+    document.getElementById('alt-save').addEventListener('click', sendAlt);
+    document.getElementById('exAddBtn').addEventListener('click', addExcluded);
+
+    // Default backend URL to current origin
+    $('base').value = location.origin.includes('localhost') ? 'http://localhost:4000' : location.origin;
+
+    // Initial loads
+    document.addEventListener('DOMContentLoaded', () => {
+      loadOverrides();
+      loadAltMap();
+      loadExcluded();
+    });
   </script>
 </body>
 </html>
