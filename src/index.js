@@ -1,9 +1,10 @@
+// index.js — wired to the ESM memory router
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
-import attendanceRoutes from './routes/attendance.js';
+import memoryAttendanceRoutes from './routes/attendance.memoryroutes.esm.js'; // <-- new router
 import { ensureFiles } from './lib/storage.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -15,12 +16,18 @@ app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173'
 }));
 
-// Serve static admin UI
+app.use(express.json());
+
+// Serve static admin UI (e.g., public/admin.html)
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Health + API routes
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
-app.use('/api/attendance', attendanceRoutes);
+
+app.use('/api/attendance', memoryAttendanceRoutes({
+  adminToken: process.env.ATTEND_ADMIN_TOKEN,            // required to modify/import
+  persistFile: process.env.LOCAL_STATE_PATH || ''        // optional local persistence (e.g. "./attendance-state.json")
+}));
 
 const PORT = Number(process.env.PORT || 4000);
 app.listen(PORT, () => {
