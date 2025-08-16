@@ -49,10 +49,27 @@
         <label for="base">Backend URL</label>
         <input id="base" autocomplete="off" placeholder="https://tempest-attendance.onrender.com">
       </div>
-      <div class="field">
-        <label for="token">Admin Token</label>
-        <input id="token" autocomplete="off" placeholder="ATTEND_ADMIN_TOKEN">
-      </div>
+<form id="authForm" autocomplete="on" spellcheck="false" style="margin:0">
+  <!-- hidden username field so Proton Pass thinks it's a login form -->
+  <div style="position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden;">
+    <label for="pp-username">Username</label>
+    <input id="pp-username" name="username" type="text" autocomplete="username" value="admin">
+  </div>
+
+  <div class="field">
+    <label for="token">Admin Token</label>
+    <input
+      id="token"
+      name="password"
+      type="password"
+      placeholder="ATTEND_ADMIN_TOKEN"
+      autocomplete="current-password"
+      autocapitalize="off"
+      spellcheck="false"
+    >
+  </div>
+</form>
+
     </div>
     <p class="muted" style="margin-top:8px">Token must match server <code>ATTEND_ADMIN_TOKEN</code>.</p>
   </section>
